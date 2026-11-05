@@ -4,11 +4,12 @@ const OWNERS = [
   {ma:'HTL', ten:'Pallet HTL', mo:'Pallet thuộc sở hữu Công ty HTL, dùng cho vận hành kho & vận tải', mau:'var(--htl)'},
   {ma:'TP',  ten:'Pallet Thọ Phát', mo:'Pallet của Thọ Phát gửi tại kho HTL, HTL quản lý hộ', mau:'var(--tp)'},
 ];
+// Tồn đầu kỳ pallet = 0 (người dùng chốt 05/11/2026: bắt đầu dùng phần mềm từ số 0)
 const PALLETS = [
-  {ma:'PG12', ten:'Pallet gỗ 1000×1200',  kt:'1000×1200×150', dau:{HTL:120,TP:110}},
-  {ma:'PN11', ten:'Pallet nhựa 1100×1100', kt:'1100×1100×150', dau:{HTL:60,TP:90}},
-  {ma:'PN12', ten:'Pallet nhựa 1000×1200', kt:'1000×1200×150', dau:{HTL:70,TP:50}},
-  {ma:'PS',   ten:'Pallet sắt',            kt:'1000×1200×130', dau:{HTL:20,TP:10}},
+  {ma:'PG12', ten:'Pallet gỗ 1000×1200',  kt:'1000×1200×150', dau:{HTL:0,TP:0}},
+  {ma:'PN11', ten:'Pallet nhựa 1100×1100', kt:'1100×1100×150', dau:{HTL:0,TP:0}},
+  {ma:'PN12', ten:'Pallet nhựa 1000×1200', kt:'1000×1200×150', dau:{HTL:0,TP:0}},
+  {ma:'PS',   ten:'Pallet sắt',            kt:'1000×1200×130', dau:{HTL:0,TP:0}},
 ];
 const TUYEN = [
   {ma:'T01', ten:'T01 – Hà Đông / Thanh Xuân'},
@@ -155,6 +156,7 @@ function dongBo(hien){
 }
 function capNhatSo(){   // cập nhật số phiếu đang hiện trên form sau khi đồng bộ (không xoá nội dung đang nhập)
   if(typeof NLOAI!=='undefined') nSo.value = LN(NLOAI).pre + String((seqN[NLOAI]||0)+1).padStart(4,'0');
+  if(typeof NLOAI!=='undefined') nBBso.value = 'BB' + String(seqBB+1).padStart(4,'0');
   if(typeof XLOAI!=='undefined'){ xSo.value = 'PX' + String(seqX+1).padStart(4,'0'); xBBso.value = 'BB' + String(seqBB+1).padStart(4,'0'); }
 }
 window.dongBo = dongBo;
@@ -198,10 +200,14 @@ function phieuList(arr){
   arr.forEach(t=>{ if(!m.has(t.so)) m.set(t.so,{...t, lines:[]}); m.get(t.so).lines.push(t); });
   return [...m.values()];
 }
+/* SL thực tế của 1 dòng: nhập = tốt + hỏng (số thực nhận), xuất = SL thực giao. SL chứng từ / theo phiếu = slp (dòng nhập cũ chưa có slp → coi như khớp) */
+const thucTe = t => t.loai==='NHAP' ? (t.sl||0) + (t.hong||0) : (t.sl||0);
+const ctOf = t => (t.slp===undefined || t.slp===null || isNaN(t.slp)) ? thucTe(t) : t.slp;
+const bbNhap = b => !String(b.px||'').startsWith('PX');
 function taoBB(so, file, gc){
   const L = tx.filter(t=>t.so===so);
   const bb = {so:'BB'+String(++seqBB).padStart(4,'0'), px:so, chu:L[0].chu, ngay:L[0].ngay, xe:L[0].xe, taixe:L[0].nguoi, file, gc, st:'Chờ kiểm tra',
-              dong:L.filter(t=>t.sl!==t.slp).map(t=>({ma:t.ma, lo:t.lo, slp:t.slp, sl:t.sl}))};
+              dong:L.filter(t=>thucTe(t)!==t.slp).map(t=>({ma:t.ma, lo:t.lo, slp:t.slp, sl:thucTe(t)}))};
   BB.push(bb); L.forEach(t=>t.bb=bb.so);
   return bb;
 }
@@ -299,7 +305,7 @@ function renderDashboard(){
 
   const chk = [
     ...am.map(r=>`<tr><td>${TAG_AM}</td><td><div>${cTag(r.chu)} ${pName(r.ma)}${r.lo?' · lô '+r.lo:''}: <b class="negv">${r.c}</b> ${r.dvt}</div></td><td><span class="lnk" onclick="go('ton')">Xem tồn kho</span></td></tr>`),
-    ...bbCho.map(b=>`<tr><td><span class="tag warn">Thừa / thiếu bàn giao</span></td><td><div>${cTag(b.chu)} ${b.dong.map(x=>`${pName(x.ma)}: ${clHTML(x.slp,x.sl)}`).join(', ')}</div></td>
+    ...bbCho.map(b=>`<tr><td><span class="tag warn">${bbNhap(b)?'Thừa / thiếu nhập kho':'Thừa / thiếu bàn giao'}</span></td><td><div>${cTag(b.chu)} ${b.dong.map(x=>`${pName(x.ma)}: ${clHTML(x.slp,x.sl)}`).join(', ')}</div></td>
       <td><div><span class="lnk" onclick="xemPhieu('${b.so}')">${b.so}</span> · <span class="lnk" onclick="xemPhieu('${b.px}')">${b.px}</span></div></td></tr>`),
     ...dsCho.map(p=>`<tr><td><span class="tag out">Chờ đối soát</span></td><td><div>${cTag(p.chu)} ${p.lydo} · ${p.diem} · ${sum(p.lines,l=>l.sl)} ${dvtOf(p.chu,p.ma)}</div></td>
       <td><div><span class="lnk" onclick="xemPhieu('${p.so}')">${p.so}</span> · <span class="lnk" onclick="go('doisoat')">Đối soát</span></div></td></tr>`)];
@@ -308,7 +314,7 @@ function renderDashboard(){
   dashRecent.innerHTML = P.sort(byNew).slice(0,8).map(p=>`<tr><td><b class="lnk" onclick="xemPhieu('${p.so}')">${p.so}</b></td><td>${fmtVN(p.ngay)}</td><td><div>${tag(p.loai)} ${cTag(p.chu)}</div></td>
     <td>${p.diem}</td><td class="num ${p.loai==='NHAP'?'pos':'neg'}">${p.loai==='NHAP'?'+':'−'}${sum(p.lines,l=>l.sl)}</td><td>${bgCell(p)}</td></tr>`).join('');
 }
-const bgCell = t => t.loai!=='XUAT' ? '' : t.bb ? `<span class="tag warn lnk" onclick="xemPhieu('${t.bb}')">${t.bb}</span>` : '<span class="tag ok">Khớp</span>';
+const bgCell = t => t.bb ? `<span class="tag warn lnk" onclick="xemPhieu('${t.bb}')">${t.bb}</span>` : (t.loai==='XUAT' || (t.slp!==undefined && t.slp!==null)) ? '<span class="tag ok">Khớp</span>' : '';
 
 /* ---------- TỒN KHO ---------- */
 function renderTon(){
@@ -343,11 +349,167 @@ function renderDoiSoat(){
     <td>${DS.has(p.so)?'<span class="tag ok">Đã đối soát</span>':`<button class="ico-btn go" onclick="xacNhanDS('${p.so}')">✔ Xác nhận đối soát</button>`}</td></tr>`}).join('')
     || '<tr><td colspan="6" class="note">Không có phiếu</td></tr>';
   bbBody.innerHTML = BB.filter(b=>!FL||b.chu===FL).slice().reverse().map(b=>`<tr><td><b class="lnk" onclick="xemPhieu('${b.so}')">${b.so}</b></td><td>${fmtVN(b.ngay)}</td>
-    <td><div><span class="lnk" onclick="xemPhieu('${b.px}')">${b.px}</span> ${cTag(b.chu)}</div></td><td><div>${b.taixe||'—'}<span class="sub2">${b.xe}${b.file?' · 📎 '+b.file:''}</span></div></td>
+    <td><div><span class="tag ${bbNhap(b)?'in':'out'}">${bbNhap(b)?'Nhập':'Xuất'}</span> <span class="lnk" onclick="xemPhieu('${b.px}')">${b.px}</span> ${cTag(b.chu)}</div></td><td><div>${b.taixe||'—'}<span class="sub2">${b.xe}${b.file?' · 📎 '+b.file:''}</span></div></td>
     <td><div>${b.dong.map(x=>`${pName(x.ma)}: ${clHTML(x.slp,x.sl)}`).join('<br>')}</div></td>
     <td>${b.st==='Đã xử lý'?'<span class="tag ok">Đã xử lý</span>':`<button class="ico-btn go" onclick="xuLyBB('${b.so}')">✔ Đánh dấu đã xử lý</button>`}</td></tr>`).join('')
     || '<tr><td colspan="6" class="note">Chưa có biên bản</td></tr>';
 }
+/* ---------- BÁO CÁO THỪA / THIẾU (nhập: thực nhận so với chứng từ · xuất: thực giao so với phiếu) ---------- */
+let bcSel = '';   // kỳ đang chọn để xem chi tiết
+function bcKyDoi(){
+  const thang = bcKy.value==='thang';
+  bcFrom.value = thang ? TODAY.slice(0,4)+'-01-01' : fmtISO(new Date(today.getFullYear(), today.getMonth(), 1)); bcTo.value = TODAY;
+  bcSel = ''; renderBaoCao();
+}
+function bcRows(){
+  const from = bcFrom.value, to = bcTo.value, k = bcLoai.value;
+  return scoped().filter(t=>(!k||t.loai===k) && t.ngay>=from && t.ngay<=to)
+    .map(t=>{ const ct = ctOf(t), th = thucTe(t); return {...t, ct, th, d:th-ct}; });
+}
+const bcKey = t => bcKy.value==='thang' ? t.ngay.slice(0,7) : t.ngay;
+const bcKyTxt = k => k.length===7 ? `Tháng ${k.slice(5)}/${k.slice(0,4)}` : fmtVN(k);
+function bcGroup(R){
+  const P = phieuList(R), G = {};
+  P.forEach(p=>{ const k = bcKey(p), g = G[k] = G[k] || {k, n:0, lech:0, thua:0, thieu:0, ct:0, th:0, nThua:0, nThieu:0};
+    const du = sum(p.lines,l=>Math.max(0,l.d)), thieu = sum(p.lines,l=>Math.max(0,-l.d));
+    g.n++; g.lech += p.lines.some(l=>l.d!==0)?1:0; g.thua += du; g.thieu += thieu; g.ct += sum(p.lines,l=>l.ct); g.th += sum(p.lines,l=>l.th);
+    if(du) g.nThua++; if(thieu) g.nThieu++; });
+  return Object.values(G).sort((a,b)=>b.k.localeCompare(a.k));
+}
+function renderBaoCao(){
+  if(!bcFrom.value){ bcKyDoi(); return; }
+  const R = bcRows(), P = phieuList(R), G = bcGroup(R), thang = bcKy.value==='thang', lk = bcLoai.value;
+  const lech = P.filter(p=>p.lines.some(l=>l.d!==0)), du = sum(R,r=>Math.max(0,r.d)), thieu = sum(R,r=>Math.max(0,-r.d));
+  const bbCho = BB.filter(b=>b.st!=='Đã xử lý' && (!FL||b.chu===FL) && (!lk || (lk==='NHAP')===bbNhap(b)) && b.ngay>=bcFrom.value && b.ngay<=bcTo.value).length;
+  const ten = lk==='NHAP'?'Phiếu nhập':lk==='XUAT'?'Phiếu xuất':'Phiếu nhập + xuất';
+  bcTong.innerHTML = `<div><small>${ten} trong kỳ</small><b>${P.length}</b></div>`
+    + `<div><small>Phiếu có chênh lệch</small><b class="${lech.length?'warnc':''}">${lech.length}</b></div>`
+    + `<div><small>Tỷ lệ lệch</small><b>${P.length?Math.round(lech.length/P.length*1000)/10:0}%</b></div>`
+    + `<div><small>Tổng thừa (+)</small><b class="cl-thua">${du?'+'+du:0}</b></div>`
+    + `<div><small>Tổng thiếu (−)</small><b class="cl-thieu">${thieu?'−'+thieu:0}</b></div>`
+    + `<div><small>Biên bản chờ xử lý</small><b class="${bbCho?'warnc':''}">${bbCho}</b></div>`;
+  // biểu đồ: 12 kỳ gần nhất trong khoảng – số phiếu thừa / số phiếu thiếu
+  const C = G.slice(0,12).reverse(), max = Math.max(1, ...C.flatMap(g=>[g.nThua,g.nThieu]));
+  bcChart.innerHTML = C.map(g=>`<div class="day"><div class="bars"><div class="bar thua" style="height:${g.nThua/max*100}%" data-v="${g.nThua}"></div><div class="bar thieu" style="height:${g.nThieu/max*100}%" data-v="${g.nThieu}"></div></div></div>`).join('') || '<p class="note">Không có phiếu trong kỳ</p>';
+  bcChartX.innerHTML = C.map(g=>`<div>${thang ? g.k.slice(5)+'/'+g.k.slice(2,4) : fmtVN(g.k).slice(0,5)}</div>`).join('');
+  // theo loại hàng
+  bcLoaiBody.innerHTML = loaiInScope().map(o=>{ const r = R.filter(t=>t.chu===o.ma), p = phieuList(r); if(!p.length) return '';
+    return `<tr><td>${cTag(o.ma)}</td><td class="num">${p.length}</td><td class="num">${p.filter(x=>x.lines.some(l=>l.d!==0)).length||'–'}</td>
+      <td class="num cl-thua">${sum(r,x=>Math.max(0,x.d))||'–'}</td><td class="num cl-thieu">${sum(r,x=>Math.max(0,-x.d))||'–'}</td></tr>`; }).join('') || '<tr><td colspan="5" class="note">Không có phiếu</td></tr>';
+  // tổng hợp theo kỳ
+  bcKyTh.textContent = thang ? 'Tháng' : 'Ngày'; bcKyTitle.textContent = 'Tổng hợp theo ' + (thang ? 'tháng' : 'ngày');
+  bcKyBody.innerHTML = G.map(g=>`<tr class="${bcSel===g.k?'sel':''}" onclick="bcSel=bcSel==='${g.k}'?'':'${g.k}';renderBaoCao()"><td><b>${bcKyTxt(g.k)}</b></td><td class="num">${g.n}</td>
+      <td class="num ${g.lech?'warnc':''}">${g.lech||'–'}</td><td class="num">${g.n?Math.round(g.lech/g.n*1000)/10:0}%</td><td class="num">${g.ct}</td><td class="num">${g.th}</td>
+      <td class="num cl-thua">${g.thua?'+'+g.thua:'–'}</td><td class="num cl-thieu">${g.thieu?'−'+g.thieu:'–'}</td></tr>`).join('')
+    || '<tr><td colspan="8" class="note">Không có phiếu trong kỳ</td></tr>';
+  // chi tiết
+  const D = R.filter(r=>r.d!==0 && (!bcSel || bcKey(r)===bcSel)).sort(byNew);
+  bcCtTitle.textContent = 'Chi tiết dòng hàng thừa / thiếu' + (bcSel ? ' – ' + bcKyTxt(bcSel) : ' – cả kỳ');
+  bcCtBody.innerHTML = D.map(r=>{ const b = BB.find(x=>x.px===r.so);
+    return `<tr><td>${fmtVN(r.ngay)}</td><td><div><b class="lnk" onclick="xemPhieu('${r.so}')">${r.so}</b><span class="sub2">${r.loai==='NHAP'?'Nhập':'Xuất'} · ${cName(r.chu)}</span></div></td><td>${esc(r.diem||'')}</td><td><div>${pName(r.ma)}<span class="sub2">${r.lo?'Lô '+r.lo+' · ':''}${r.dvt||dvtOf(r.chu,r.ma)}</span></div></td>
+      <td class="num">${r.ct}</td><td class="num">${r.th}</td><td>${clHTML(r.ct, r.th)}</td>
+      <td>${b?`<div><span class="lnk" onclick="xemPhieu('${b.so}')">${b.so}</span><span class="sub2" style="color:${b.st==='Đã xử lý'?'#15803d':'#b45309'}">${b.st==='Đã xử lý'?'✔ Đã xử lý':'⏳ Chờ kiểm tra'}</span></div>`:'<span class="note">Chưa có</span>'}</td></tr>`; }).join('')
+    || '<tr><td colspan="9" class="note">Không có dòng thừa / thiếu</td></tr>';
+}
+function taiBaoCao(){
+  const lk = bcLoai.value, ten = lk==='NHAP'?'NHẬP KHO':lk==='XUAT'?'XUẤT KHO (BÀN GIAO LÁI XE)':'NHẬP + XUẤT KHO';
+  const sel = bcSel; bcSel = ''; renderBaoCao();
+  taiFile(`BaoCao_ThuaThieu_${bcFrom.value}_${bcTo.value}.xls`, headerPhieu('') + `<h3 style="color:#e11b22">BÁO CÁO THỪA / THIẾU HÀNG – ${ten}</h3><p>Kỳ: ${fmtVN(bcFrom.value)} – ${fmtVN(bcTo.value)} · theo ${bcKy.value==='thang'?'tháng':'ngày'}${FL?' · Loại hàng: '+cName(FL):''}</p>`
+    + `<p>${[...bcTong.querySelectorAll('div')].map(d=>d.querySelector('small').textContent+': <b>'+d.querySelector('b').textContent+'</b>').join(' · ')}</p>`
+    + `<h4>Tổng hợp theo ${bcKy.value==='thang'?'tháng':'ngày'}</h4><table border="1" style="border-collapse:collapse">${bcKyTable.innerHTML}</table>`
+    + `<h4>Chi tiết dòng hàng thừa / thiếu</h4><table border="1" style="border-collapse:collapse">${bcCtTable.innerHTML}</table>`);
+  bcSel = sel; renderBaoCao();
+}
+
+/* ---------- LƯU TRỮ BIÊN BẢN / CHỨNG TỪ ĐÃ KÝ (bảng chung_tu + file biên bản thừa / thiếu) ---------- */
+const CT = STORE.ct();
+const CT_LOAI = {BG:'Biên bản bàn giao hàng', NH:'Biên bản nhập hàng', TT:'Biên bản ghi nhận thừa / thiếu', KHAC:'Chứng từ khác'};
+const ctLoaiGoiY = so => /^PX/i.test(so) ? 'BG' : /^BB/i.test(so) ? 'TT' : so ? 'NH' : 'KHAC';
+/* Danh sách hồ sơ: biên bản / chứng từ đã lưu + file đính kèm của biên bản thừa / thiếu (lập trên phiếu) */
+function hoSo(){
+  const a = CT.map(c=>({...c, src:'ct'}));
+  BB.filter(b=>b.file).forEach(b=>{ if(!a.some(c=>c.so===b.so && c.file===b.file))
+    a.push({id:'bb-'+b.so, so:b.so, px:b.px, loai:'TT', ngay:b.ngay, file:b.file, file_path:b.file_path||'', gc:(b.gc||'') + ' · đính kèm khi lập phiếu ' + b.px, src:'bb'}); });
+  return a;
+}
+const coPhieu = so => tx.some(t=>t.so===so) || BB.some(b=>b.so===so);
+const lnkSo = so => coPhieu(so) ? `<b class="lnk" onclick="xemPhieu('${esc(so)}')">${esc(so)}</b>` : `<b>${esc(so)}</b>`;
+const soGoc = h => h.px || (String(h.so).startsWith('BB') ? (BB.find(b=>b.so===h.so)?.px||'') : h.so);   // phiếu nhập / xuất liên quan
+async function xemFile(path, name){
+  if(!path) return toast(STORE.online ? '⚠ File này chưa được tải lên máy chủ' : 'Chế độ thử trên máy: file không được lưu, chỉ lưu tên file', 3500);
+  const w = window.open('', '_blank');
+  try{ const u = await STORE.fileUrl(path); if(!u) throw new Error('không lấy được đường dẫn'); if(w) w.location = u; else location.href = u; }
+  catch(e){ if(w) w.close(); toast('⚠ Không mở được file: '+(e.message||e), 3500); }
+}
+function ltInit(){
+  ltLoai.innerHTML = Object.entries(CT_LOAI).map(([k,v])=>opt(k,v)).join('');
+  ltLocLoai.innerHTML = '<option value="">Tất cả loại biên bản</option>' + Object.entries(CT_LOAI).map(([k,v])=>opt(k,v)).join('');
+  ltFrom.value = fmtISO(new Date(today.getFullYear(), today.getMonth(), 1)); ltTo.value = TODAY; ltNgay.value = TODAY;
+}
+function ltSoDoi(){
+  const so = ltSo.value.trim().toUpperCase(), P = phieuList(tx.filter(t=>t.so===so))[0], b = BB.find(x=>x.so===so);
+  if(so) ltLoai.value = ctLoaiGoiY(so);
+  if(P) ltNgay.value = P.ngay; else if(b) ltNgay.value = b.ngay;
+  ltHint.innerHTML = P ? `${P.loai==='NHAP'?'Phiếu nhập':'Phiếu xuất'} ${cName(P.chu)} · ${fmtVN(P.ngay)} · ${esc(P.diem||'')}`
+    : b ? `Biên bản thừa / thiếu của phiếu ${b.px} · ${fmtVN(b.ngay)}` : so ? '⚠ Chưa có phiếu / biên bản số này – vẫn lưu được (VD chứng từ khác)' : '';
+}
+function themCT(so){
+  dongPhieu(); go('luutru'); ltSo.value = so; ltSoDoi(); ltGc.value = ''; ltFile.value = '';
+  ltForm.scrollIntoView({behavior:'smooth'});
+}
+let dangLuuCT = false;
+async function luuCT(){
+  const so = ltSo.value.trim().toUpperCase(), F = [...ltFile.files];
+  if(!so) return toast('⚠ Vui lòng nhập số phiếu / biên bản');
+  if(!F.length) return toast('⚠ Vui lòng chọn file ảnh / PDF biên bản');
+  if(dangLuuCT) return; dangLuuCT = true; toast(`Đang lưu ${F.length} file…`, 8000);
+  let ok = 0;
+  try{ for(const f of F){ if(await STORE.addCT({so, loai:ltLoai.value, ngay:ltNgay.value||TODAY, gc:ltGc.value.trim()}, f)) ok++; } }
+  finally{ dangLuuCT = false; }
+  if(ok){ toast(`✔ Đã lưu ${ok} file biên bản cho ${so}`); ltFile.value = ''; ltGc.value = ''; }
+  renderLuuTru();
+}
+/* Lưu biên bản đã ký chọn ngay trên phiếu nhập / xuất (không bắt buộc) */
+function luuKyFile(inp, so, loai, ngay){
+  const F = [...(inp.files||[])]; inp.value = '';
+  F.forEach(f=>STORE.addCT({so, loai, ngay, gc:'Đính kèm khi lập phiếu'}, f).then(()=>renderLuuTru()));
+}
+function ltRows(){
+  const q = ltQ.value.trim().toLowerCase(), lo = ltLocLoai.value, from = ltFrom.value, to = ltTo.value;
+  return hoSo().filter(h=>(!lo||h.loai===lo) && (!from||h.ngay>=from) && (!to||h.ngay<=to)
+      && (!FL || (phieuList(tx.filter(t=>t.so===soGoc(h)))[0]?.chu===FL))
+      && (!q || [h.so, soGoc(h), h.gc, h.file].join(' ').toLowerCase().includes(q)))
+    .sort((a,b)=>(b.ngay||'').localeCompare(a.ngay||'') || String(b.luc||b.id).localeCompare(String(a.luc||a.id)));
+}
+function renderLuuTru(){
+  if(!ltFrom.value) ltInit();
+  const R = ltRows(), dem = k => R.filter(h=>h.loai===k).length;
+  ltTong.innerHTML = `<div><small>Tổng file</small><b>${R.length}</b></div>` + ['BG','NH','TT'].map(k=>`<div><small>${CT_LOAI[k].replace('Biên bản ','')}</small><b>${dem(k)}</b></div>`).join('');
+  ltBody.innerHTML = R.map(h=>{ const g = soGoc(h), P = phieuList(tx.filter(t=>t.so===g))[0];
+    return `<tr><td>${h.ngay?fmtVN(h.ngay):'—'}</td><td><span class="tag ${h.loai==='TT'?'warn':h.loai==='NH'?'in':h.loai==='BG'?'out':''}">${CT_LOAI[h.loai]||h.loai}</span></td>
+      <td><div>${lnkSo(h.so)}${g&&g!==h.so?`<span class="sub2">phiếu ${lnkSo(g)}</span>`:''}</div></td>
+      <td><div>${P?cTag(P.chu):''}<span class="sub2">${esc(P?.diem||'')}</span></div></td>
+      <td><div><span class="lnk" onclick="xemFile('${esc(h.file_path)}')">👁 ${esc(h.file)}</span></div></td>
+      <td><div>${esc(h.gc||'')}<span class="sub2">${esc(h.nguoi||'')}</span></div></td></tr>`; }).join('')
+    || '<tr><td colspan="6" class="note">Chưa có biên bản nào trong kỳ</td></tr>';
+  const coBB = new Set(hoSo().map(soGoc));
+  const thieu = phieuList(scoped().filter(t=>t.ngay>=ltFrom.value && t.ngay<=ltTo.value)).filter(p=>!coBB.has(p.so)).sort(byNew);
+  ltThieu.innerHTML = thieu.slice(0,100).map(p=>`<tr><td>${fmtVN(p.ngay)}</td><td><div>${tag(p.loai)} <b class="lnk" onclick="xemPhieu('${p.so}')">${p.so}</b></div></td>
+      <td>${cTag(p.chu)}</td><td>${esc(p.diem||'')}</td><td><button class="ico-btn go" onclick="themCT('${p.so}')">📎 Lưu biên bản</button></td></tr>`).join('')
+    || '<tr><td colspan="5" class="note">Tất cả phiếu trong kỳ đã có biên bản</td></tr>';
+  ltSoList.innerHTML = [...new Set([...tx.map(t=>t.so), ...BB.map(b=>b.so)])].sort().reverse().slice(0,300).map(s=>`<option value="${s}">`).join('');
+}
+function taiLuuTru(){
+  taiFile(`LuuTru_BienBan_${ltFrom.value}_${ltTo.value}.xls`, headerPhieu('') + `<h3 style="color:#e11b22">DANH SÁCH BIÊN BẢN / CHỨNG TỪ ĐÃ LƯU</h3><p>Kỳ: ${fmtVN(ltFrom.value)} – ${fmtVN(ltTo.value)}</p>`
+    + `<table border="1" style="border-collapse:collapse">${ltTable.innerHTML}</table>`);
+}
+/* Trong cửa sổ xem phiếu: liệt kê biên bản đã lưu của phiếu đó */
+function ctCuaPhieu(so){
+  const H = hoSo().filter(h=>h.so===so || soGoc(h)===so);
+  return H.length ? `<div class="ct-list"><b>📎 Biên bản / chứng từ đã lưu (${H.length})</b>${H.map(h=>`<div><span class="lnk" onclick="xemFile('${esc(h.file_path)}')">👁 ${esc(h.file)}</span> <span class="note">· ${CT_LOAI[h.loai]||h.loai} · ${h.ngay?fmtVN(h.ngay):''}</span></div>`).join('')}</div>`
+    : `<div class="ct-list note">Chưa lưu biên bản đã ký cho ${esc(so)}. Bấm <b style="display:inline">📎 Lưu biên bản</b> để chụp / tải lên.</div>`;
+}
+
 function xacNhanDS(so){ DS.add(so); STORE.addDS(so); toast('✔ Đã đối soát '+so); renderAll(); }
 function xuLyBB(id){ const b = BB.find(b=>b.so===id); b.st = 'Đã xử lý'; STORE.addBB(b); toast('✔ Đã xử lý biên bản '+id); renderAll(); }
 
@@ -540,12 +702,14 @@ function chonLoai(ma){
   nXe.innerHTML = xeOpts(); nNguoi.innerHTML = taixeOpts(); fillNV(nUser, nThuKho);
   nBooking.value = nGc.value = nDT.value = '';
   nSec3.textContent = pal ? 'Pallet nhập (tách tốt / hỏng)' : 'Hàng nhập';
+  const ctH = `<th class="num tgc">SL theo chứng từ</th><th class="tgc">Chênh lệch</th>`;
   nHead.innerHTML = pal
-    ? `<tr><th class="stt">#</th><th style="width:46%">Loại pallet</th><th class="num" style="width:20%">SL tốt</th><th class="num" style="width:20%">SL hỏng</th><th style="width:36px"></th></tr>`
-    : `<tr><th class="stt">#</th><th style="width:38%">Mặt hàng</th><th class="num" style="width:16%">Số lượng</th><th style="width:16%">ĐVT</th><th style="width:22%">Số lô</th><th style="width:36px"></th></tr>`;
+    ? `<tr><th class="stt">#</th><th style="width:40%">Loại pallet</th><th class="num">SL tốt</th><th class="num">SL hỏng</th>${ctH}<th style="width:36px"></th></tr>`
+    : `<tr><th class="stt">#</th><th style="width:26%">Mặt hàng</th><th class="num" style="width:11%">SL thực nhận</th><th style="width:12%">ĐVT</th><th style="width:17%">Số lô</th>${ctH}<th style="width:36px"></th></tr>`;
   nAddTxt.textContent = pal ? '+ Thêm loại pallet' : '+ Thêm mặt hàng';
   nNote.textContent = pal ? 'Lưu phiếu → tăng tồn pallet.' : 'Số lô để trống sẽ tự tạo theo ngày nhập.';
-  nLines.innerHTML = ''; addLineN();
+  nBBso.value = 'BB' + String(seqBB+1).padStart(4,'0'); nBBfile.value = ''; nBBgc.value = ''; nBBnn.selectedIndex = 0;
+  nLines.innerHTML = ''; addLineN(); setDC('khop');
 }
 function updViTri_cu(){
   const pal = isPalC(NLOAI), t = nTuyen.value;
@@ -553,21 +717,37 @@ function updViTri_cu(){
 }
 function addLineN(){
   const tr = document.createElement('tr');
+  const ctC = `<td class="num tgc">${NUM('ct')}</td><td class="tgc cl"></td>`;
   tr.innerHTML = isPalC(NLOAI)
-    ? `<td class="stt"></td><td class="w2"><select class="pl">${palletOpts()}</select></td><td class="num">${NUM('sl')}</td><td class="num">${NUM('hong')}</td>${DEL}`
+    ? `<td class="stt"></td><td class="w2"><select class="pl">${palletOpts()}</select></td><td class="num">${NUM('sl')}</td><td class="num">${NUM('hong')}</td>${ctC}${DEL}`
     : `<td class="stt"></td><td class="w2"><select class="pl" data-add="hang" onchange="this.closest('tr').querySelector('.dvt').value=dvtOf(NLOAI,this.value)">${hangOpts(NLOAI,true)}</select></td>
-       <td class="num">${NUM('sl')}</td><td>${dvtSel(dvtOf(NLOAI,HANG[NLOAI][0]?.ma))}</td><td><input class="lo" placeholder="Tự tạo nếu để trống"></td>${DEL}`;
+       <td class="num">${NUM('sl')}</td><td>${dvtSel(dvtOf(NLOAI,HANG[NLOAI][0]?.ma))}</td><td><input class="lo" placeholder="Tự tạo nếu để trống"></td>${ctC}${DEL}`;
   nLines.appendChild(tr); updSumN();
 }
+/* Đối chiếu chứng từ khi nhập (giống bàn giao lái xe ở phiếu xuất): khớp → SL chứng từ = SL thực nhận; có thừa / thiếu → nhập SL chứng từ + biên bản */
+let DCM = 'khop';
+function setDC(m){
+  DCM = m;
+  nTable.classList.toggle('nobg', m==='khop'); nbbBox.classList.toggle('show', m==='lech');
+  dcOpt.querySelectorAll('label').forEach(l=>l.classList.toggle('on', l.dataset.m===m));
+  dcOpt.querySelector(`input[value="${m}"]`).checked = true;
+  updSumN();
+}
+function updLineN(tr){
+  const thuc = (+tr.querySelector('.sl').value||0) + (+(tr.querySelector('.hong')?.value||0)), ct = tr.querySelector('.ct');
+  if(ct.dataset.t!=='1') ct.value = thuc;
+  tr.querySelector('.cl').innerHTML = clHTML(+ct.value||0, thuc);
+}
 function updSumN(){
-  [...nLines.rows].forEach((tr,i)=>tr.cells[0].textContent=i+1);
-  const R = [...nLines.rows].map(tr=>({sl:+tr.querySelector('.sl').value||0, hong:+(tr.querySelector('.hong')?.value||0)}));
-  const L = LN(NLOAI), pal = L.nhom==='PALLET';
+  [...nLines.rows].forEach((tr,i)=>{ tr.cells[0].textContent = i+1; updLineN(tr); });
+  const R = [...nLines.rows].map(tr=>({sl:+tr.querySelector('.sl').value||0, hong:+(tr.querySelector('.hong')?.value||0), ct:+tr.querySelector('.ct').value||0}));
+  const L = LN(NLOAI), pal = L.nhom==='PALLET', tct = sum(R,r=>r.ct), tth = sum(R,r=>r.sl+r.hong), d = tth - tct;
   nSum.innerHTML = `<div><small>Số dòng</small><b>${R.filter(r=>r.sl>0).length}</b></div>`
     + (pal?`<div><small>Pallet hỏng</small><b>${sum(R,r=>r.hong)}</b></div>`:'')
+    + (DCM==='lech' ? `<div><small>Theo chứng từ</small><b>${tct}</b></div><div><small>Chênh lệch</small><b class="${d<0?'cl-thieu':d>0?'cl-thua':''}">${d>0?'+':''}${d}</b></div>` : '')
     + `<div class="tot" style="background:${L.mau};border-color:${L.mau}"><small style="color:rgba(255,255,255,.85)">Tổng ${pal?'pallet tốt':'số lượng'}</small><b>${sum(R,r=>r.sl)}</b></div>`;
 }
-nLines.addEventListener('input',updSumN); nLines.addEventListener('change',updSumN);
+nLines.addEventListener('input',e=>{ if(e.target.classList.contains('ct')) e.target.dataset.t = '1'; updSumN(); }); nLines.addEventListener('change',updSumN);
 /* Phiếu nhập không còn ô "Lý do nhập" (theo mẫu Word 05/11/2026) – hệ thống tự suy ra từ nguồn nhập để trang Đối soát vẫn lọc được hàng thu hồi / trả về */
 function lyDoNhap(ma, nguon){
   const L = LN(ma), pal = isPalC(ma), npp = NPP.some(d=>d.ten===nguon);
@@ -579,17 +759,20 @@ function saveNhap(){ return truocKhiLuu(luuNhap); }
 function luuNhap(){
   if(!kiemOCR(nCard)) return;
   const L = LN(NLOAI), pal = L.nhom==='PALLET';
-  const rows = [...nLines.rows].map(tr=>({ma:tr.querySelector('.pl').value, sl:+tr.querySelector('.sl').value||0, hong:+(tr.querySelector('.hong')?.value||0),
-      lo:tr.querySelector('.lo')?.value.trim()||'', dvt:tr.querySelector('select.dvt')?.value})).filter(r=>r.sl>0||r.hong>0);
+  const rows = [...nLines.rows].map(tr=>{ const sl = +tr.querySelector('.sl').value||0, hong = +(tr.querySelector('.hong')?.value||0);
+      return {ma:tr.querySelector('.pl').value, sl, hong, slp: DCM==='lech' ? (+tr.querySelector('.ct').value||0) : sl+hong,
+      lo:tr.querySelector('.lo')?.value.trim()||'', dvt:tr.querySelector('select.dvt')?.value}; }).filter(r=>r.sl>0||r.hong>0||r.slp>0);
   if(!rows.length) return toast('⚠ Vui lòng nhập số lượng');
+  if(DCM==='lech' && rows.every(r=>r.sl+r.hong===r.slp)) return toast('⚠ Chưa có dòng thừa / thiếu – nếu đủ, chọn "Đủ – khớp chứng từ"');
   const loAuto = 'L' + (nNgay.value||TODAY).replace(/-/g,'').slice(2);
   if(!pal) rows.forEach((r,i)=>{ if(!r.lo) r.lo = `${loAuto}-${i+1}`; });
   const so = soN(NLOAI);
   rows.forEach(r=>tx.push({so, ngay:nNgay.value||TODAY, loai:'NHAP', lydo:lyDoNhap(NLOAI, nNguon.value), diem:nNguon.value, chu:NLOAI, ...r, gc:nGc.value, booking:nBooking.value,
     xe:nXe.value||'—', nguoi:nNguoi.value, dt:nDT.value, user:nUser.value, thukho:nThuKho.value, anh:OCR.used==='N'?OCR.name:''}));
   OCR.used = '';
-  STORE.addTx(tx.filter(t=>t.so===so));
-  toast(`✔ Đã lưu ${so} – tăng tồn ${sum(rows,r=>r.sl)}`);
+  const bb = DCM==='lech' ? taoBB(so, nBBfile.files[0]?.name||'', [nBBnn.value, nBBgc.value].filter(Boolean).join(' – ')) : null;
+  STORE.addTx(tx.filter(t=>t.so===so)); if(bb) STORE.addBB(bb, nBBfile.files[0]); luuKyFile(nKyFile, so, 'NH', nNgay.value||TODAY);
+  toast(`✔ Đã lưu ${so} – tăng tồn ${sum(rows,r=>r.sl)}${bb?' + biên bản '+bb.so:''}`, bb?4000:2600);
   chonLoai(NLOAI); renderAll(); xemPhieu(so);
 }
 
@@ -706,7 +889,7 @@ function luuXuat(){
     tuyen:noiInfo(xNoi.value).tuyen||'', xe:xXe.value||'—', nguoi:xNguoi.value, dt:xDT.value, user:xUser.value, thukho:xThuKho.value, anh:OCR.used==='X'?OCR.name:''}));
   OCR.used = '';
   const bb = BGM==='lech' ? taoBB(so, xBBfile.files[0]?.name||'', xBBgc.value) : null;
-  STORE.addTx(tx.filter(t=>t.so===so)); if(bb) STORE.addBB(bb, xBBfile.files[0]);
+  STORE.addTx(tx.filter(t=>t.so===so)); if(bb) STORE.addBB(bb, xBBfile.files[0]); luuKyFile(xKyFile, so, 'BG', xNgay.value||TODAY);
   toast(`✔ Đã lưu ${so}${bb?' + biên bản '+bb.so:''}${am?` · ⚠ ${am} dòng tồn âm`:''}`, 4000);
   chonLoaiX(XLOAI); renderAll(); xemPhieu(so);
 }
@@ -797,7 +980,7 @@ const BLANK = '......................................';
 /* cols: [tiêu đề, giá trị(r,i), căn lề, tổng(L)] */
 function bang(cols, L){
   const cell = (c,v) => `<td style="${P_TD};text-align:${c[2]||'left'}">${v}</td>`;
-  return `<table style="width:100%;border-collapse:collapse"><thead><tr>${cols.map(c=>`<th style="${P_TH}">${c[0]}</th>`).join('')}</tr></thead><tbody>
+  return `<table style="width:100%;border-collapse:collapse;${cols.length>8?"font-size:12px":""}"><thead><tr>${cols.map(c=>`<th style="${P_TH}">${c[0]}</th>`).join('')}</tr></thead><tbody>
     ${L.map((r,i)=>'<tr>'+cols.map(c=>cell(c,c[1](r,i))).join('')+'</tr>').join('')}
     <tr style="font-weight:bold;background:#231f20;color:#fff">${cols.map((c,j)=>cell(c, j===1?'TỔNG CỘNG':c[3]?c[3](L):'')).join('')}</tr></tbody></table>`;
 }
@@ -823,7 +1006,8 @@ function phieuHTML(so){
   const {h,L,nhap,cat,hang,bb} = phieuData(so);
   const cols = [['STT',(r,i)=>i+1,'center'],['Mã',r=>r.ma],[hang?'Tên hàng':'Loại pallet',r=>pName(r.ma)],['ĐVT',dvtR,'center']];
   if(hang) cols.push(['Số lô',r=>r.lo||'']);
-  if(nhap){ cols.push([hang?'Số lượng':'SL tốt',r=>r.sl,'right',L=>sum(L,r=>r.sl)]); if(!hang) cols.push(['SL hỏng',r=>r.hong||0,'right',L=>sum(L,r=>r.hong||0)]); }
+  if(nhap){ cols.push([hang?'Số lượng':'SL tốt',r=>r.sl,'right',L=>sum(L,r=>r.sl)]); if(!hang) cols.push(['SL hỏng',r=>r.hong||0,'right',L=>sum(L,r=>r.hong||0)]);
+           if(bb) cols.push(['SL theo chứng từ',r=>ctOf(r),'right',L=>sum(L,ctOf)],['Chênh lệch',r=>clTxt(ctOf(r),thucTe(r)),'center']); }
   else { cols.push(['SL theo phiếu',r=>r.slp,'right',L=>sum(L,r=>r.slp)]);
          if(bb) cols.push(['SL thực giao',r=>r.sl,'right',L=>sum(L,r=>r.sl)],['Chênh lệch',r=>clTxt(r.slp,r.sl),'center']); }
   const info = nhap
@@ -832,37 +1016,38 @@ function phieuHTML(so){
     : [['Loại hàng',`<b>${cat.ten}</b>`],['Lái xe nhận hàng',h.nguoi||BLANK],['Tuyến giao / nơi nhận',`<b>${esc(noiTxt(h))}</b>`],['Biển số xe',h.xe],
        ['Lý do xuất',h.lydo],['Điện thoại',h.dt||dtLX(h.nguoi)||BLANK],['Số đơn / booking',h.booking||BLANK]];
   const gc = [...new Set(L.map(r=>r.gc).filter(Boolean))].join('; ');
-  const bg = nhap ? `<p style="margin:10px 0 0"><b>Đối chiếu chứng từ:</b> ☐ Khớp chứng từ &nbsp;&nbsp;&nbsp; ☐ Có chênh lệch (lập biên bản chênh lệch)</p>` : `<p style="margin:10px 0 0"><b>Bàn giao cho lái xe:</b> ${bb ? `có thừa / thiếu – Biên bản <b>${bb.so}</b>${bb.file?' (file: '+bb.file+')':''}. Tồn kho trừ theo SL thực giao.` : 'đủ, khớp phiếu.'}</p>`;
+  const dcIn = L.some(r=>r.slp!==undefined && r.slp!==null);   // phiếu lập từ bản 1.2 mới có đối chiếu
+  const bg = nhap ? `<p style="margin:10px 0 0"><b>Đối chiếu chứng từ:</b> ${dcIn&&!bb?'☒':'☐'} Khớp chứng từ &nbsp;&nbsp;&nbsp; ${bb?'☒':'☐'} Có chênh lệch ${bb?`– Biên bản <b>${bb.so}</b>${bb.file?' (file: '+esc(bb.file)+')':''}. Tồn kho tăng theo SL thực nhận.`:'(lập biên bản chênh lệch)'}</p>` : `<p style="margin:10px 0 0"><b>Bàn giao cho lái xe:</b> ${bb ? `có thừa / thiếu – Biên bản <b>${bb.so}</b>${bb.file?' (file: '+bb.file+')':''}. Tồn kho trừ theo SL thực giao.` : 'đủ, khớp phiếu.'}</p>`;
   return docWrap(nhap?cat.pre+'-NK':'PX-'+cat.ma, h.so, nhap?cat.phieu:cat.phieuX, h.ngay, infoTbl(info) + bang(cols,L)
     + (gc?`<p style="margin:10px 0 0"><b>Ghi chú:</b> ${esc(gc)}</p>`:'') + bg
     + (h.anh?`<p style="margin:4px 0 0;font-size:12.5px"><i>Số liệu đọc tự động từ ảnh chứng từ: ${esc(h.anh)} – đã được người lập kiểm tra.</i></p>`:'')
     + kyTbl([['Người lập phiếu',h.user],[nhap?'Người giao':'Lái xe nhận hàng',h.nguoi],['Thủ kho',h.thukho||''],[cat.ky,'']]));
 }
 function bbHTML(id){
-  const b = BB.find(x=>x.so===id), L = tx.filter(t=>t.so===b.px), h = L[0], cat = LN(h.chu), hang = cat.nhom==='HANG';
+  const b = BB.find(x=>x.so===id), L = tx.filter(t=>t.so===b.px).map(t=>({...t, slp:ctOf(t), sl:thucTe(t)})), h = L[0], cat = LN(h.chu), hang = cat.nhom==='HANG', nh = bbNhap(b);
   const cols = [['STT',(r,i)=>i+1,'center'],['Mã',r=>r.ma],[hang?'Tên hàng':'Loại pallet',r=>pName(r.ma)],['ĐVT',dvtR,'center']];
   if(hang) cols.push(['Số lô',r=>r.lo||'']);
-  cols.push(['SL theo phiếu',r=>r.slp,'right',L=>sum(L,r=>r.slp)],['SL thực tế',r=>r.sl,'right',L=>sum(L,r=>r.sl)],
+  cols.push([nh?'SL chứng từ':'SL theo phiếu',r=>r.slp,'right',L=>sum(L,r=>r.slp)],['SL thực tế',r=>r.sl,'right',L=>sum(L,r=>r.sl)],
     ['Thừa (+)',r=>r.sl>r.slp?`<b>${r.sl-r.slp}</b>`:'','right',L=>sum(L,r=>Math.max(0,r.sl-r.slp))||''],['Thiếu (−)',r=>r.sl<r.slp?`<b>${r.slp-r.sl}</b>`:'','right',L=>sum(L,r=>Math.max(0,r.slp-r.sl))||'']);
   const cb = (on, t) => `${on?'☒':'☐'} ${t}`;
   return docWrap('BB-LX', b.so, 'BIÊN BẢN GHI NHẬN THỪA / THIẾU HÀNG', b.ngay,
-    `<p style="margin:0 0 6px"><b>Thời điểm phát hiện:</b> ${cb(0,'Nhận hàng nhập kho')} &nbsp;&nbsp; ${cb(1,'Bàn giao cho lái xe')} &nbsp;&nbsp; ${cb(0,'Giao tại NPP')}</p>`
-    + infoTbl([['Phiếu nhập / xuất số',`<b>${b.px}</b>`],['Loại hàng',`<b>${cat.ten}</b>`],['Nơi nhận / tuyến',esc(noiTxt(h))],['Địa điểm lập',CTY.kho?'Kho '+CTY.kho:BLANK],
-               ['Lái xe',b.taixe||BLANK],['Biển số xe',b.xe],['Điện thoại',h.dt||dtLX(b.taixe)||BLANK],['Giờ lập',BLANK]])
+    `<p style="margin:0 0 6px"><b>Thời điểm phát hiện:</b> ${cb(nh,'Nhận hàng nhập kho')} &nbsp;&nbsp; ${cb(!nh,'Bàn giao cho lái xe')} &nbsp;&nbsp; ${cb(0,'Giao tại NPP')}</p>`
+    + infoTbl([['Phiếu nhập / xuất số',`<b>${b.px}</b>`],['Loại hàng',`<b>${cat.ten}</b>`],[nh?'Nguồn nhập':'Nơi nhận / tuyến',esc(nh?h.diem:noiTxt(h))],['Địa điểm lập',CTY.kho?'Kho '+CTY.kho:BLANK],
+               [nh?'Người giao (tài xế)':'Lái xe',b.taixe||BLANK],['Biển số xe',b.xe],['Điện thoại',h.dt||dtLX(b.taixe)||BLANK],['Giờ lập',BLANK]])
     + bang(cols,L)
     + `<p style="margin:10px 0 0"><b>Nội dung chênh lệch:</b> ${b.dong.map(x=>`${x.ma}${x.lo?' (lô '+x.lo+')':''}: ${clTxt(x.slp,x.sl)}`).join('; ')}</p>`
     + `<p style="margin:4px 0 0"><b>Tình trạng / nguyên nhân:</b> ☐ Đếm sai &nbsp; ☐ Hỏng / móp &nbsp; ☐ Thiếu từ nguồn &nbsp; ☐ Nhầm lô / mã &nbsp; ☐ Khác</p>`
     + `<p style="margin:4px 0 0"><b>Mô tả chi tiết:</b> ${esc(b.gc)||BLANK}</p>`
-    + `<p style="margin:4px 0 0"><b>Hướng xử lý:</b> ${cb(1,'Trừ tồn theo SL thực tế')} &nbsp; ☐ Bổ sung / giao bù &nbsp; ☐ Trả lại hàng thừa &nbsp; ☐ Lái xe chịu trách nhiệm &nbsp; ☐ Báo chủ hàng xử lý</p>`
+    + `<p style="margin:4px 0 0"><b>Hướng xử lý:</b> ${cb(1, nh?'Nhập tồn theo SL thực nhận':'Trừ tồn theo SL thực tế')} &nbsp; ☐ Bổ sung / giao bù &nbsp; ☐ Trả lại hàng thừa &nbsp; ☐ Lái xe chịu trách nhiệm &nbsp; ☐ Báo chủ hàng xử lý</p>`
     + `<p style="margin:4px 0 0"><b>Ảnh / chứng từ đính kèm:</b> ${b.file?'☒ Có – '+esc(b.file):'☐ Có &nbsp; ☒ Không'} &nbsp; · &nbsp; <b>Trạng thái:</b> ${b.st}</p>`
     + `<p style="margin:4px 0 0;font-style:italic">Biên bản lập thành 02 bản, mỗi bên giữ 01 bản, có giá trị như nhau.</p>`
-    + kyTbl([['Lái xe',b.taixe],['Thủ kho',h.thukho||''],['Người lập biên bản',h.user],[cat.ky,'']]));
+    + kyTbl([[nh?'Người giao':'Lái xe',b.taixe],['Thủ kho',h.thukho||''],['Người lập biên bản',h.user],[cat.ky,'']]));
 }
 function xemPhieu(so){
   pmSo = so;
   if(so.startsWith('BB')) pmTitle.textContent = `Biên bản thừa / thiếu · ${so}`;
   else { const D = phieuData(so); pmTitle.textContent = `${D.nhap?'Phiếu nhập':'Phiếu xuất'} ${D.cat.ten} · ${so}`; }
-  pmBody.innerHTML = phieuHTML(so);
+  pmBody.innerHTML = phieuHTML(so); pmCT.innerHTML = ctCuaPhieu(so);
   phieuModal.classList.add('show');
 }
 function dongPhieu(){phieuModal.classList.remove('show')}
@@ -1252,7 +1437,7 @@ function dienPhieu(){
 }, true));
 
 /* ---------- ĐIỀU HƯỚNG (desktop: thanh trái · điện thoại: thanh dưới + menu trượt) ---------- */
-const TITLES = {dashboard:'Tổng quan',nhap:'Phiếu nhập kho',xuat:'Phiếu xuất kho',ton:'Tồn kho (N–X–T)',doisoat:'Thu hồi / trả về',lichsu:'Lịch sử giao dịch',dulieu:'Lái xe & nhân viên kho',danhmuc:'Danh mục'};
+const TITLES = {luutru:'Lưu trữ biên bản',baocao:'Báo cáo thừa / thiếu',dashboard:'Tổng quan',nhap:'Phiếu nhập kho',xuat:'Phiếu xuất kho',ton:'Tồn kho (N–X–T)',doisoat:'Thu hồi / trả về',lichsu:'Lịch sử giao dịch',dulieu:'Lái xe & nhân viên kho',danhmuc:'Danh mục'};
 function go(id){
   document.querySelectorAll('.page').forEach(s=>s.classList.toggle('active',s.id===id));
   document.querySelectorAll('#nav a, #bnav a[data-page]').forEach(a=>a.classList.toggle('active',a.dataset.page===id));
@@ -1265,7 +1450,7 @@ function toggleSide(v){ document.querySelector('.app').classList.toggle('side-op
 nav.addEventListener('click',e=>{const a=e.target.closest('a');if(a)go(a.dataset.page)});
 bnav.addEventListener('click',e=>{const a=e.target.closest('a'); if(!a) return; a.dataset.page ? go(a.dataset.page) : toggleSide(true);});
 function toast(m,ms=2600){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),ms)}
-function renderAll(){renderDashboard();renderTon();renderDoiSoat();renderLichSu();}
+function renderAll(){renderDashboard();renderTon();renderDoiSoat();renderLichSu();renderBaoCao();renderLuuTru();}
 
 /* Gắn nhãn cột cho từng ô → trên điện thoại bảng hiển thị dạng thẻ */
 function labelTables(){

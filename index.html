@@ -66,7 +66,8 @@
   .day{flex:1;display:flex;flex-direction:column;align-items:center;height:100%;justify-content:flex-end}
   .bars{display:flex;gap:4px;align-items:flex-end;height:100%}
   .bar{width:16px;border-radius:4px 4px 0 0;position:relative}
-  .bar.in{background:#22c55e}.bar.out{background:#3b82f6}
+  .bar.in{background:#22c55e}.bar.out{background:#3b82f6}.bar.thua{background:#b45309}.bar.thieu{background:#dc2626}
+  #bcKyBody tr{cursor:pointer}#bcKyBody tr.sel td{background:#fdeaea}
   .bar:hover::after{content:attr(data-v);position:absolute;top:-20px;left:50%;transform:translateX(-50%);font-size:11px;background:#111;color:#fff;padding:1px 5px;border-radius:3px}
   .xlbl{display:flex;gap:14px;padding:6px 4px 0}.xlbl div{flex:1;text-align:center;font-size:12px;color:var(--muted)}
   .legend{display:flex;gap:14px;font-size:12px;color:var(--muted);font-weight:400}
@@ -177,6 +178,10 @@
   .bg-opt input{margin-top:3px}
   .bb-box{border:1px dashed #f0b429;background:#fffbeb;border-radius:10px;padding:14px;margin-bottom:6px;display:none}
   .bb-box.show{display:block}
+  .ky-file{display:block;border:1px dashed var(--line);border-radius:10px;padding:10px 14px;margin:0 0 12px;font-weight:600;font-size:13px}
+  .ky-file input{display:block;margin-top:6px;font-weight:400}
+  .ct-list{margin:10px 0 0;padding:10px 14px;border:1px solid var(--line);border-radius:10px;background:#fafafa;font-size:13px}
+  .ct-list b{display:block;margin-bottom:4px}
   .warnc{color:#b45309;font-weight:700}
   .negv{color:var(--bad);font-weight:700}
   .cl-thieu{color:var(--bad);font-weight:700}.cl-thua{color:#b45309;font-weight:700}
@@ -243,6 +248,7 @@
   .shake{animation:shake .25s 2}
   .bnav,.scrim{display:none}
   @media (max-width:760px){
+    #bcTong{display:grid!important;grid-template-columns:repeat(3,1fr);gap:8px}#bcTong div{min-width:0;padding:8px 10px}#bcTong small{font-size:10px}
     body{font-size:15px}
     aside{position:fixed;left:0;top:0;bottom:0;z-index:60;transform:translateX(-105%);transition:transform .2s;box-shadow:4px 0 24px rgba(0,0,0,.18);overflow-y:auto}
     .app.side-open aside{transform:none}
@@ -348,6 +354,8 @@
       <a data-page="xuat"><span class="ico">⬆</span>Phiếu xuất</a>
       <a data-page="ton"><span class="ico">▤</span>Tồn kho</a>
       <a data-page="doisoat"><span class="ico">⇄</span>Thu hồi / trả về</a>
+      <a data-page="baocao"><span class="ico">📊</span>Báo cáo thừa / thiếu</a>
+      <a data-page="luutru"><span class="ico">📁</span>Lưu trữ biên bản</a>
       <a data-page="lichsu"><span class="ico">☰</span>Lịch sử giao dịch</a>
       <a data-page="dulieu"><span class="ico">👥</span>Lái xe &amp; nhân viên kho</a>
       <a data-page="danhmuc"><span class="ico">⚙</span>Danh mục</a>
@@ -429,8 +437,23 @@
               </div>
             </details>
             <div class="fsec s2"><span class="n">2</span><span id="nSec3">Hàng nhập</span></div>
-            <table class="lines"><thead id="nHead"></thead><tbody id="nLines"></tbody></table>
+            <table class="lines nobg" id="nTable"><thead id="nHead"></thead><tbody id="nLines"></tbody></table>
             <button class="addline" onclick="addLineN()" id="nAddTxt">+ Thêm dòng</button>
+            <div class="fsec s2"><span class="n">3</span>Đối chiếu chứng từ (phiếu giao hàng của bên giao)</div>
+            <div class="bg-opt" id="dcOpt">
+              <label data-m="khop" onclick="setDC('khop')"><input type="radio" name="dc" value="khop" checked><div><b>Đủ – khớp chứng từ</b><div class="note">Số thực nhận đúng với chứng từ.</div></div></label>
+              <label data-m="lech" onclick="setDC('lech')"><input type="radio" name="dc" value="lech"><div><b>Có thừa / thiếu</b><div class="note">Nhập SL theo chứng từ, lập biên bản chênh lệch.</div></div></label>
+            </div>
+            <label class="ky-file">📎 Biên bản nhập hàng đã ký <span class="note">(ảnh / PDF – không bắt buộc, có thể bổ sung sau ở mục Lưu trữ biên bản)</span><input type="file" id="nKyFile" accept="image/*,.pdf" multiple></label>
+            <div class="bb-box" id="nbbBox">
+              <div class="form">
+                <label>Số biên bản<input id="nBBso" readonly></label>
+                <label>File biên bản (ảnh / PDF)<input type="file" id="nBBfile" accept="image/*,.pdf"></label>
+                <label>Nguyên nhân<select id="nBBnn"><option>Thiếu từ nguồn</option><option>Thừa so với chứng từ</option><option>Hỏng / móp</option><option>Nhầm mã / lô</option><option>Đếm sai</option><option>Khác</option></select></label>
+                <label>Ghi chú biên bản<input id="nBBgc" placeholder="VD: thiếu 2 thùng so với phiếu giao"></label>
+              </div>
+              <p class="note" style="margin:10px 0 0">Tồn kho tăng theo <b>SL thực nhận</b>; SL theo chứng từ được lưu để đối chiếu và lên báo cáo thừa / thiếu. <a href="#" onclick="mauExcel('BB');return false">⬇ Mẫu biên bản thừa / thiếu (Excel)</a></p>
+            </div>
             <div class="fsum" id="nSum"></div>
           </div>
           <div class="ffoot">
@@ -481,6 +504,7 @@
               <label data-m="khop" onclick="setBG('khop')"><input type="radio" name="bg" value="khop" checked><div><b>Đủ – khớp phiếu</b><div class="note">Lái xe nhận đúng số lượng.</div></div></label>
               <label data-m="lech" onclick="setBG('lech')"><input type="radio" name="bg" value="lech"><div><b>Có thừa / thiếu</b><div class="note">Nhập SL thực giao, lập biên bản lái xe.</div></div></label>
             </div>
+            <label class="ky-file">📎 Biên bản bàn giao hàng đã ký <span class="note">(ảnh / PDF – không bắt buộc, có thể bổ sung sau ở mục Lưu trữ biên bản)</span><input type="file" id="xKyFile" accept="image/*,.pdf" multiple></label>
             <div class="bb-box" id="bbBox">
               <div class="form">
                 <label>Số biên bản<input id="xBBso" readonly></label>
@@ -514,6 +538,72 @@
         </div>
       </section>
 
+      <!-- BÁO CÁO THỪA / THIẾU -->
+      <section class="page" id="baocao">
+        <div class="panel">
+          <div class="toolbar">
+            <label class="note">Xem theo <select id="bcKy" onchange="bcKyDoi()"><option value="ngay">Ngày</option><option value="thang">Tháng</option></select></label>
+            <label class="note">Từ <input type="date" id="bcFrom"></label>
+            <label class="note">Đến <input type="date" id="bcTo"></label>
+            <label class="note">Phiếu <select id="bcLoai"><option value="NHAP">Nhập kho</option><option value="XUAT">Xuất kho (bàn giao lái xe)</option><option value="">Nhập + xuất</option></select></label>
+            <button class="btn primary" onclick="bcSel='';renderBaoCao()">Xem</button>
+            <span class="spacer"></span>
+            <button class="btn ghost" onclick="taiBaoCao()">⬇ Xuất Excel</button>
+          </div>
+          <div class="fsum" id="bcTong" style="justify-content:flex-start;margin:0 0 6px"></div>
+        </div>
+        <div class="grid2">
+          <div class="panel">
+            <h3>Số phiếu có chênh lệch <span class="legend"><span><i style="background:#b45309"></i>Thừa</span><span><i style="background:#dc2626"></i>Thiếu</span></span></h3>
+            <div class="chart" id="bcChart"></div>
+            <div class="xlbl" id="bcChartX"></div>
+          </div>
+          <div class="panel">
+            <h3>Theo loại hàng</h3>
+            <div class="tbl"><table class="stack"><thead><tr><th>Loại hàng</th><th class="num">Phiếu</th><th class="num">Phiếu lệch</th><th class="num">Thừa</th><th class="num">Thiếu</th></tr></thead><tbody id="bcLoaiBody"></tbody></table></div>
+          </div>
+        </div>
+        <div class="panel">
+          <h3 id="bcKyTitle">Tổng hợp theo ngày</h3>
+          <div class="tbl"><table class="stack" id="bcKyTable"><thead><tr><th id="bcKyTh">Ngày</th><th class="num">Số phiếu</th><th class="num">Phiếu lệch</th><th class="num">Tỷ lệ lệch</th><th class="num">SL chứng từ</th><th class="num">SL thực tế</th><th class="num">Thừa (+)</th><th class="num">Thiếu (−)</th></tr></thead><tbody id="bcKyBody"></tbody></table></div>
+          <p class="note">Bấm vào một dòng để xem chi tiết các phiếu lệch của ngày / tháng đó. SL cộng gộp mọi ĐVT (thùng, kiện, cái…) – xem chi tiết để biết ĐVT từng dòng.</p>
+        </div>
+        <div class="panel">
+          <h3 id="bcCtTitle">Chi tiết dòng hàng thừa / thiếu</h3>
+          <div class="tbl"><table class="stack" id="bcCtTable"><thead><tr><th>Ngày</th><th>Phiếu · loại hàng</th><th>Nguồn / nơi nhận</th><th>Mặt hàng · lô</th><th class="num">SL chứng từ</th><th class="num">SL thực tế</th><th>Chênh lệch</th><th>Biên bản</th></tr></thead><tbody id="bcCtBody"></tbody></table></div>
+        </div>
+      </section>
+
+      <!-- LƯU TRỮ BIÊN BẢN -->
+      <section class="page" id="luutru">
+        <div class="panel" id="ltForm">
+          <h3>Lưu biên bản / chứng từ đã ký</h3>
+          <div class="form">
+            <label><span>Loại biên bản <i>*</i></span><select id="ltLoai"></select></label>
+            <label><span>Số phiếu / biên bản <i>*</i></span><input id="ltSo" list="ltSoList" placeholder="VD: PX0001, PNT0002, BB0001" oninput="ltSoDoi()" autocomplete="off"><datalist id="ltSoList"></datalist></label>
+            <label>Ngày<input type="date" id="ltNgay"></label>
+            <label><span>File ảnh / PDF <i>*</i></span><input type="file" id="ltFile" accept="image/*,.pdf" multiple></label>
+            <label>Ghi chú<input id="ltGc" placeholder="VD: bản có chữ ký lái xe và NPP"></label>
+          </div>
+          <div class="toolbar" style="margin-top:8px"><span class="note" id="ltHint" style="flex:1"></span><button class="btn primary" onclick="luuCT()">✔ Lưu biên bản</button></div>
+        </div>
+        <div class="panel">
+          <div class="toolbar">
+            <select id="ltLocLoai" onchange="renderLuuTru()"></select>
+            <input class="grow" id="ltQ" placeholder="Tìm số phiếu, số biên bản, ghi chú..." oninput="renderLuuTru()">
+            <label class="note">Từ <input type="date" id="ltFrom" onchange="renderLuuTru()"></label>
+            <label class="note">Đến <input type="date" id="ltTo" onchange="renderLuuTru()"></label>
+            <button class="btn ghost" onclick="taiLuuTru()">⬇ Excel</button>
+          </div>
+          <div class="fsum" id="ltTong" style="justify-content:flex-start;margin:0 0 12px"></div>
+          <div class="tbl"><table class="stack" id="ltTable"><thead><tr><th>Ngày</th><th>Loại biên bản</th><th>Số phiếu</th><th>Loại hàng · nơi</th><th>File</th><th>Ghi chú · người lưu</th></tr></thead><tbody id="ltBody"></tbody></table></div>
+        </div>
+        <div class="panel">
+          <h3>Phiếu chưa có biên bản đã ký <span class="note">trong kỳ đang xem</span></h3>
+          <div class="tbl"><table class="stack"><thead><tr><th>Ngày</th><th>Phiếu</th><th>Loại hàng</th><th>Nguồn / nơi nhận</th><th></th></tr></thead><tbody id="ltThieu"></tbody></table></div>
+        </div>
+      </section>
+
       <!-- THU HỒI / TRẢ VỀ -->
       <section class="page" id="doisoat">
         <div class="panel">
@@ -525,7 +615,7 @@
         <div class="panel">
           <h3>Biên bản ghi nhận thừa / thiếu hàng</h3>
           <div class="ocr-bar" style="margin-bottom:12px"><span class="note">Mẫu biên bản trống (Excel) để thủ kho / lái xe ghi tay khi phát hiện thừa – thiếu, ký rồi chụp đính kèm vào phiếu xuất.</span><button class="btn ghost" onclick="mauExcel('BB')">⬇ Mẫu biên bản Excel</button></div>
-          <div class="tbl"><table class="stack"><thead><tr><th>Số biên bản</th><th>Ngày</th><th>Phiếu xuất</th><th>Lái xe · xe</th><th>Chênh lệch</th><th>Trạng thái</th></tr></thead><tbody id="bbBody"></tbody></table></div>
+          <div class="tbl"><table class="stack"><thead><tr><th>Số biên bản</th><th>Ngày</th><th>Phiếu nhập / xuất</th><th>Người giao / lái xe · xe</th><th>Chênh lệch</th><th>Trạng thái</th></tr></thead><tbody id="bbBody"></tbody></table></div>
         </div>
       </section>
 
@@ -630,8 +720,9 @@
     <div class="modal-head"><b id="pmTitle">Phiếu</b>
       <button class="btn primary" onclick="inPhieu(pmSo)">🖨 In / PDF</button>
       <button class="btn ghost" onclick="taiExcel(pmSo)">⬇ Excel</button>
+      <button class="btn ghost" onclick="themCT(pmSo)">📎 Lưu biên bản</button>
       <button class="btn ghost" onclick="dongPhieu()">Đóng</button></div>
-    <div class="modal-body"><div class="sheet" id="pmBody"></div></div>
+    <div class="modal-body"><div id="pmCT"></div><div class="sheet" id="pmBody"></div></div>
   </div>
 </div>
 <div class="modal am" id="addModal" onclick="if(event.target===this)dongAdd()">

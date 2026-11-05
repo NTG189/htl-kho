@@ -9,7 +9,7 @@
   const CFG = window.HTL_CONFIG || {};
   const ONLINE = !!(CFG.SUPABASE_URL && CFG.SUPABASE_ANON_KEY);
   const LKEY = 'htlLocalDB', QKEY = 'htlOutbox';
-  const D = {kv:{}, tx:[], bb:[], ds:[]};
+  const D = {kv:{}, tx:[], bb:[], ds:[], ct:[]};
   let sb = null, user = null;
 
   /* ---- Chuyển đổi dòng giao dịch <-> bảng giao_dich ---- */
@@ -26,9 +26,14 @@
   const bbObj = r => ({so:r.so, px:r.px, chu:r.chu, ngay:r.ngay, xe:r.xe||'', taixe:r.taixe||'', file:r.file||'',
                        file_path:r.file_path||'', gc:r.gc||'', st:r.st, dong:(r.dong||[]).map(d=>({...d, sl:Number(d.sl), slp:Number(d.slp)}))});
 
+  // Lưu trữ biên bản / chứng từ đã ký (bảng chung_tu): id, so (số phiếu), loai (BG / NH / TT / KHAC), ngay, file, file_path, gc
+  const ctRow = c => ({id:c.id, so:c.so||null, loai:c.loai, ngay:c.ngay||null, file:c.file||null, file_path:c.file_path||null, gc:c.gc||null, nguoi:c.nguoi||null});
+  const ctObj = r => ({id:r.id, so:r.so||'', loai:r.loai, ngay:r.ngay||'', file:r.file||'', file_path:r.file_path||'', gc:r.gc||'', nguoi:r.nguoi||'', luc:r.tao_luc||''});
+
   /* ---- Chế độ thử trên máy ---- */
   function loadLocal(){
     try{ Object.assign(D, JSON.parse(localStorage.getItem(LKEY)||'{}')); }catch(e){}
+    if(!Array.isArray(D.ct)) D.ct = [];
     // lần đầu: lấy danh mục / lái xe / thông tin công ty đã lưu ở bản mockup (nếu cùng trình duyệt)
     ['htlDuLieuDauVao','htlDanhMucMoi','htlPalletCty'].forEach(k=>{ if(D.kv[k]===undefined){ try{ const v = localStorage.getItem(k); if(v) D.kv[k] = JSON.parse(v); }catch(e){} } });
     if(D.kv.htlPalletLogo===undefined && localStorage.getItem('htlPalletLogo')) D.kv.htlPalletLogo = localStorage.getItem('htlPalletLogo');
@@ -48,6 +53,7 @@
     if(o.t==='ds')  r = await sb.from('doi_soat').upsert({so:o.so, nguoi:user?.email||null}, {onConflict:'so'});
     if(o.t==='kv')  r = await sb.from('cai_dat').upsert({khoa:o.k, gia_tri:o.v, cap_nhat:new Date().toISOString()}, {onConflict:'khoa'});
     if(o.t==='kvd') r = await sb.from('cai_dat').delete().eq('khoa', o.k);
+    if(o.t==='ct')  r = await sb.from('chung_tu').upsert(o.row, {onConflict:'id'});
     if(r && r.error) throw r.error;
   }
   let flushing = false;
@@ -74,22 +80,24 @@
     }
     return out;
   }
+  const allCT = () => all('chung_tu',['tao_luc','id']).catch(e=>{ console.warn('Chưa có bảng chung_tu', e); return []; });
   async function loadRemote(){
     await flush();
-    const [kv, tx, bb, ds] = await Promise.all([all('cai_dat',['khoa']), all('giao_dich',['so','dong']), all('bien_ban',['so']), all('doi_soat',['so'])]);
+    const [kv, tx, bb, ds, ct] = await Promise.all([all('cai_dat',['khoa']), all('giao_dich',['so','dong']), all('bien_ban',['so']), all('doi_soat',['so']), allCT()]);
     kv.forEach(r=>{ D.kv[r.khoa] = r.gia_tri; });
-    D.tx = tx.map(txObj); D.bb = bb.map(bbObj); D.ds = ds.map(r=>r.so); lastSync = new Date();
+    D.tx = tx.map(txObj); D.bb = bb.map(bbObj); D.ds = ds.map(r=>r.so); D.ct = ct.map(ctObj); lastSync = new Date();
   }
 
   // Tải lại phiếu / biên bản / đối soát từ máy chủ (giữ nguyên mảng để app.js dùng tiếp). Còn phiếu chờ gửi → không tải lại (tránh mất phiếu chưa gửi).
   async function reload(){
     if(!ONLINE || !user) return false;
     await flush(); if(Q.length) return false;
-    const [tx, bb, ds] = await Promise.all([all('giao_dich',['so','dong']), all('bien_ban',['so']), all('doi_soat',['so'])]);
+    const [tx, bb, ds, ct] = await Promise.all([all('giao_dich',['so','dong']), all('bien_ban',['so']), all('doi_soat',['so']), allCT()]);
     if(Q.length) return false;
     D.tx.length = 0; tx.forEach(r=>D.tx.push(txObj(r)));
     D.bb.length = 0; bb.forEach(r=>D.bb.push(bbObj(r)));
     D.ds.length = 0; ds.forEach(r=>D.ds.push(r.so));
+    D.ct.length = 0; ct.forEach(r=>D.ct.push(ctObj(r)));
     lastSync = new Date(); updFoot(); return true;
   }
   let lastSync = null;
@@ -136,8 +144,8 @@
   function updFoot(){
     const f = document.querySelector('.side-foot'); if(!f) return;
     f.innerHTML = ONLINE
-      ? `Phiên bản 1.1 · ${user?.email||''}${Q.length?` · <b style="color:#b45309">${Q.length} chờ gửi</b>`:''}<br><a href="#" id="syncLnk" style="color:inherit">⟳ Cập nhật dữ liệu</a>${lastSync?` <span style="font-size:11px">(${lastSync.toTimeString().slice(0,5)})</span>`:''} · <a href="#" id="logoutLnk" style="color:inherit">Đăng xuất</a>`
-      : 'Phiên bản 1.0 · <b style="color:#b45309">Chế độ thử trên máy</b><br><span style="font-size:11px">Dữ liệu chỉ lưu trong trình duyệt này</span>';
+      ? `Phiên bản 1.2 · ${user?.email||''}${Q.length?` · <b style="color:#b45309">${Q.length} chờ gửi</b>`:''}<br><a href="#" id="syncLnk" style="color:inherit">⟳ Cập nhật dữ liệu</a>${lastSync?` <span style="font-size:11px">(${lastSync.toTimeString().slice(0,5)})</span>`:''} · <a href="#" id="logoutLnk" style="color:inherit">Đăng xuất</a>`
+      : 'Phiên bản 1.2 · <b style="color:#b45309">Chế độ thử trên máy</b><br><span style="font-size:11px">Dữ liệu chỉ lưu trong trình duyệt này</span>';
     const sy = document.getElementById('syncLnk'); if(sy) sy.onclick = e => { e.preventDefault(); window.dongBo && window.dongBo(true); };
     const l = document.getElementById('logoutLnk');
     if(l) l.onclick = async e => { e.preventDefault(); if(Q.length && !confirm(`Còn ${Q.length} thay đổi chưa gửi lên máy chủ. Vẫn đăng xuất?`)) return;
@@ -200,7 +208,22 @@
     get: k => D.kv[k],
     set: (k, v) => { D.kv[k] = v; return push({t:'kv', k, v}); },
     del: k => { delete D.kv[k]; return push({t:'kvd', k}); },
-    tx: () => D.tx, bb: () => D.bb, ds: () => D.ds, reload,
+    tx: () => D.tx, bb: () => D.bb, ds: () => D.ds, ct: () => D.ct, reload,
+    // Lưu 1 biên bản / chứng từ đã ký: nén ảnh → tải lên Storage (bucket bien-ban, thư mục chung-tu/) → ghi bảng chung_tu
+    addCT: async (c, file) => {
+      c.id = c.id || (Date.now().toString(36) + Math.random().toString(36).slice(2,7)); c.nguoi = c.nguoi || user?.email || '';
+      if(file){ c.file = file.name;
+        if(ONLINE){
+          const goc = file.size; file = await nenAnh(file);
+          if(file.size < goc) msg(`Đã nén ảnh: ${Math.round(goc/1024)} KB → ${Math.round(file.size/1024)} KB`, 2500);
+          const p = `chung-tu/${(c.so||'khac').replace(/[^\w\-]+/g,'_')}/${Date.now()}_${file.name.replace(/[^\w.\-]+/g,'_')}`;
+          const {error} = await sb.storage.from('bien-ban').upload(p, file);
+          if(error){ msg('⚠ Chưa tải được file lên máy chủ: '+error.message, 4500); return null; }
+          c.file_path = p;
+        } else c.file_path = '';
+      }
+      D.ct.push(c); await push({t:'ct', row: ctRow(c)}); return c;
+    },
     // lines: các dòng của 1 phiếu (cùng số phiếu) – app.js đã push vào mảng tx (= D.tx)
     addTx: lines => push({t:'tx', rows: lines.map(txRow)}),
     addBB: async (bb, file) => {
