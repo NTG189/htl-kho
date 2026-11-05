@@ -78,8 +78,21 @@
     await flush();
     const [kv, tx, bb, ds] = await Promise.all([all('cai_dat',['khoa']), all('giao_dich',['so','dong']), all('bien_ban',['so']), all('doi_soat',['so'])]);
     kv.forEach(r=>{ D.kv[r.khoa] = r.gia_tri; });
-    D.tx = tx.map(txObj); D.bb = bb.map(bbObj); D.ds = ds.map(r=>r.so);
+    D.tx = tx.map(txObj); D.bb = bb.map(bbObj); D.ds = ds.map(r=>r.so); lastSync = new Date();
   }
+
+  // Tải lại phiếu / biên bản / đối soát từ máy chủ (giữ nguyên mảng để app.js dùng tiếp). Còn phiếu chờ gửi → không tải lại (tránh mất phiếu chưa gửi).
+  async function reload(){
+    if(!ONLINE || !user) return false;
+    await flush(); if(Q.length) return false;
+    const [tx, bb, ds] = await Promise.all([all('giao_dich',['so','dong']), all('bien_ban',['so']), all('doi_soat',['so'])]);
+    if(Q.length) return false;
+    D.tx.length = 0; tx.forEach(r=>D.tx.push(txObj(r)));
+    D.bb.length = 0; bb.forEach(r=>D.bb.push(bbObj(r)));
+    D.ds.length = 0; ds.forEach(r=>D.ds.push(r.so));
+    lastSync = new Date(); updFoot(); return true;
+  }
+  let lastSync = null;
 
   /* ---- Đăng nhập ---- */
   function loginForm(err){
@@ -123,8 +136,9 @@
   function updFoot(){
     const f = document.querySelector('.side-foot'); if(!f) return;
     f.innerHTML = ONLINE
-      ? `Phiên bản 1.0 · ${user?.email||''}${Q.length?` · <b style="color:#b45309">${Q.length} chờ gửi</b>`:''}<br><a href="#" id="logoutLnk" style="color:inherit">Đăng xuất</a>`
+      ? `Phiên bản 1.1 · ${user?.email||''}${Q.length?` · <b style="color:#b45309">${Q.length} chờ gửi</b>`:''}<br><a href="#" id="syncLnk" style="color:inherit">⟳ Cập nhật dữ liệu</a>${lastSync?` <span style="font-size:11px">(${lastSync.toTimeString().slice(0,5)})</span>`:''} · <a href="#" id="logoutLnk" style="color:inherit">Đăng xuất</a>`
       : 'Phiên bản 1.0 · <b style="color:#b45309">Chế độ thử trên máy</b><br><span style="font-size:11px">Dữ liệu chỉ lưu trong trình duyệt này</span>';
+    const sy = document.getElementById('syncLnk'); if(sy) sy.onclick = e => { e.preventDefault(); window.dongBo && window.dongBo(true); };
     const l = document.getElementById('logoutLnk');
     if(l) l.onclick = async e => { e.preventDefault(); if(Q.length && !confirm(`Còn ${Q.length} thay đổi chưa gửi lên máy chủ. Vẫn đăng xuất?`)) return;
       await sb.auth.signOut(); location.reload(); };
@@ -186,7 +200,7 @@
     get: k => D.kv[k],
     set: (k, v) => { D.kv[k] = v; return push({t:'kv', k, v}); },
     del: k => { delete D.kv[k]; return push({t:'kvd', k}); },
-    tx: () => D.tx, bb: () => D.bb, ds: () => D.ds,
+    tx: () => D.tx, bb: () => D.bb, ds: () => D.ds, reload,
     // lines: các dòng của 1 phiếu (cùng số phiếu) – app.js đã push vào mảng tx (= D.tx)
     addTx: lines => push({t:'tx', rows: lines.map(txRow)}),
     addBB: async (bb, file) => {

@@ -129,11 +129,43 @@ let seqN = {}; const soN = c => LN(c).pre + String(seqN[c]=(seqN[c]||0)+1).padSt
 let seqX = 0;  const soX = () => 'PX' + String(++seqX).padStart(4,'0');
 let seqBB = 0; const BB = STORE.bb();  // biên bản lái xe (thừa/thiếu khi bàn giao)
 const DS = new Set(STORE.ds());        // số phiếu thu hồi / trả về đã đối soát
-(function initSeq(){                   // số phiếu tiếp theo = số lớn nhất đã có + 1
+function initSeq(){                    // số phiếu tiếp theo = số lớn nhất đã có + 1 (gọi lại sau mỗi lần đồng bộ)
   const num = s => +(String(s).match(/(\d+)$/)||[0,0])[1];
   tx.forEach(t=>{ if(t.loai==='XUAT') seqX = Math.max(seqX, num(t.so)); else seqN[t.chu] = Math.max(seqN[t.chu]||0, num(t.so)); });
   BB.forEach(b=>{ seqBB = Math.max(seqBB, num(b.so)); });
-})();
+}
+initSeq();
+
+/* ĐỒNG BỘ – tải lại phiếu từ máy chủ để thấy phiếu do thiết bị khác vừa lập (điện thoại ↔ máy tính).
+   Tự chạy khi quay lại ứng dụng, mỗi 60 giây khi đang mở, và ngay trước khi lưu phiếu (để số phiếu không trùng). */
+let syncAt = Date.now(), syncing = null;
+function dongBo(hien){
+  if(!STORE.online) return Promise.resolve();
+  if(syncing) return syncing;
+  syncing = (async()=>{
+    try{
+      const ok = await STORE.reload();
+      if(ok){ DS.clear(); STORE.ds().forEach(s=>DS.add(s)); initSeq(); capNhatSo(); renderAll(); syncAt = Date.now();
+              if(hien) toast('✔ Đã cập nhật dữ liệu mới nhất'); }
+      else if(hien) toast('⚠ Chưa cập nhật được – còn phiếu chờ gửi lên máy chủ (mất mạng?)', 3500);
+    }catch(e){ console.warn('Đồng bộ lỗi', e); if(hien) toast('⚠ Không tải được dữ liệu mới: '+(e.message||e), 3500); }
+    finally{ syncing = null; }
+  })();
+  return syncing;
+}
+function capNhatSo(){   // cập nhật số phiếu đang hiện trên form sau khi đồng bộ (không xoá nội dung đang nhập)
+  if(typeof NLOAI!=='undefined') nSo.value = LN(NLOAI).pre + String((seqN[NLOAI]||0)+1).padStart(4,'0');
+  if(typeof XLOAI!=='undefined'){ xSo.value = 'PX' + String(seqX+1).padStart(4,'0'); xBBso.value = 'BB' + String(seqBB+1).padStart(4,'0'); }
+}
+window.dongBo = dongBo;
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible' && Date.now()-syncAt>15000) dongBo(); });
+setInterval(()=>{ if(document.visibilityState==='visible') dongBo(); }, 60000);
+let dangLuu = false;
+async function truocKhiLuu(fn){   // đồng bộ nhanh trước khi lưu → số phiếu tiếp theo đúng với máy chủ
+  if(dangLuu) return; dangLuu = true;
+  try{ if(STORE.online && navigator.onLine) await Promise.race([dongBo(), new Promise(r=>setTimeout(r,6000))]); fn(); }
+  finally{ dangLuu = false; }
+}
 
 /* TỒN – cho phép âm. lo=null: cộng mọi lô */
 function ton(c, ma, lo=null, to=TODAY){
@@ -543,7 +575,8 @@ function lyDoNhap(ma, nguon){
   if(npp) return pal ? 'Thu hồi từ điểm giao' : 'Hàng trả về';
   return pal ? (L.lydo[1] || L.lydo[0]) : L.lydo[0];
 }
-function saveNhap(){
+function saveNhap(){ return truocKhiLuu(luuNhap); }
+function luuNhap(){
   if(!kiemOCR(nCard)) return;
   const L = LN(NLOAI), pal = L.nhom==='PALLET';
   const rows = [...nLines.rows].map(tr=>({ma:tr.querySelector('.pl').value, sl:+tr.querySelector('.sl').value||0, hong:+(tr.querySelector('.hong')?.value||0),
@@ -655,7 +688,8 @@ function setBG(m){
   bgOpt.querySelector(`input[value="${m}"]`).checked = true;
   [...xLines.rows].forEach(updLine); updSumX();
 }
-function saveXuat(){
+function saveXuat(){ return truocKhiLuu(luuXuat); }
+function luuXuat(){
   if(!kiemOCR(xCard)) return;
   const pal = isPalC(XLOAI);
   if(!xNoi.value.trim()) return toast('⚠ Vui lòng chọn tuyến giao hoặc nhập nơi nhận');
@@ -1005,7 +1039,7 @@ async function chayOCR(){
   try{
     await napTesseract();
     const w = await Tesseract.createWorker('vie', 1, {logger:m=>{ if(m.status==='recognizing text') setProg(.3+.7*m.progress, 'Đang đọc chữ… '+Math.round(m.progress*100)+'%'); else setProg(.15, 'Đang chuẩn bị…'); }});
-    const {data} = await w.recognize(OCR.img); await w.terminate();
+    const {data} = await w.recognize(await anhOCR(OCR.img)); await w.terminate();
     OCR.low = new Set((data.words||[]).filter(w=>w.confidence<60).flatMap(w=>words(w.text)));
     ocrText.value = data.text.trim(); setProg(1, `Đã đọc xong · độ tin cậy ${Math.round(data.confidence)}%`);
   }catch(e){
@@ -1015,6 +1049,18 @@ async function chayOCR(){
   }
   ocrBtn.disabled = false; phanTich();
 }
+/* Chuẩn bị ảnh cho bộ đọc: thu về cạnh dài ≤ 2000 px, xoay đúng chiều → đọc nhanh hơn nhiều với ảnh điện thoại 12 MP.
+   (Đã thử ảnh xám + tăng tương phản: nền bàn gỗ bị nhiễu, đọc kém hơn → không dùng.) */
+async function anhOCR(f){
+  try{
+    const bm = await createImageBitmap(f, {imageOrientation:'from-image'});
+    const k = Math.min(1, 2000/Math.max(bm.width, bm.height)); if(k===1) return f;
+    const cv = document.createElement('canvas'); cv.width = Math.round(bm.width*k); cv.height = Math.round(bm.height*k);
+    cv.getContext('2d').drawImage(bm, 0, 0, cv.width, cv.height); return cv;
+  }catch(e){ return f; }
+}
+/* Năm đọc từ phiếu lệch xa năm hiện tại (VD ghi nhầm 2005) → lấy năm hiện tại, đánh dấu "chưa chắc chắn" */
+function namHopLe(y){ const cur = +TODAY.slice(0,4); return (Math.abs(+y - cur) <= 1) ? [y, false] : [String(cur), true]; }
 /* Nhận diện thông tin phiếu từ văn bản */
 function docPhieu(text, mode){
   const raw = String(text||'').normalize('NFC').replace(/\r/g,''), U = noDau(raw).toUpperCase(), N = nd(raw), W = words(raw), LINES = raw.split('\n');
@@ -1058,7 +1104,7 @@ function docPhieu(text, mode){
   if(mp){ const v = mp[4] ? `${mp[1]}${mp[2]}-${mp[3]}.${mp[4]}` : `${mp[1]}${mp[2]}-${mp[3]}`, k = v.replace(/[^A-Z0-9]/g,'');
     r.xe = XE.find(x=>x.replace(/[^A-Z0-9]/gi,'').toUpperCase()===k) || v; r.moi.xe = !XE.includes(r.xe); r.un.xe = un(mp[0]) || r.moi.xe; }
   const md = N.match(/(\d{1,2})\s*[\/\-.]\s*(\d{1,2})\s*[\/\-.]\s*(20\d{2})/) || N.match(/ngay\s*(\d{1,2})\s*thang\s*(\d{1,2})\s*nam\s*(20\d{2})/);
-  if(md && +md[2]>=1 && +md[2]<=12 && +md[1]>=1 && +md[1]<=31) { r.ngay = `${md[3]}-${md[2].padStart(2,'0')}-${md[1].padStart(2,'0')}`; r.un.ngay = un(md[0]); }
+  if(md && +md[2]>=1 && +md[2]<=12 && +md[1]>=1 && +md[1]<=31) { const [y, sai] = namHopLe(md[3]); r.ngay = `${y}-${md[2].padStart(2,'0')}-${md[1].padStart(2,'0')}`; r.un.ngay = un(md[0]) || sai; }
   const mb = U.match(/\bBK\s*[-–]?\s*(\d{3,})/); if(mb){ r.booking = 'BK-'+mb[1]; r.un.booking = un(mb[0]); }
   const mdh = U.match(/\bDH\s*[-–]?\s*(\d{3,})/); if(mdh){ r.don = 'DH-'+mdh[1]; r.un.don = un(mdh[0]); }
   if(mode==='N'){ const mc = U.match(/\b(PO|PGH|PXK|DO|INV)\s*[-–]?\s*(\d[\d\-\/]{2,})/); r.ct = mc ? `${mc[1]}-${mc[2]}` : (lab(/\bso (chung tu|ct|phieu)\s*[:.]/)||'').split(/\s/)[0]; r.un.ct = un(r.ct); }
@@ -1074,7 +1120,7 @@ function docPhieu(text, mode){
   if(noiHit) r.noi = noiHit; else if(noiTxt){ r.noi = noiTxt; r.moi.noi = true; r.un.noi = true; }
   r.gc = lab(/ghi chu\s*[:\-–]/);
   const mbd = N.match(/booking\s*[:.]?\s*(\d{1,2})\s*[\/\-.]\s*(\d{1,2})\s*[\/\-.]\s*(20\d{2})/);
-  if(mbd){ r.ngayBK = `${mbd[3]}-${mbd[2].padStart(2,'0')}-${mbd[1].padStart(2,'0')}`; r.un.booking = un(mbd[0]); }
+  if(mbd){ const [y, sai] = namHopLe(mbd[3]); r.ngayBK = `${y}-${mbd[2].padStart(2,'0')}-${mbd[1].padStart(2,'0')}`; r.un.booking = un(mbd[0]) || sai; }
   if(mode==='X' && !r.noi && r.tuyen){ const t = TUYEN.find(t=>t.ma===r.tuyen); r.noi = tuyenTxt(t); }
   if(mode==='X' && r.noi && r.moi.noi) r.moi.noi = false;   // nơi nhận gõ tự do, không thêm danh mục
   return r;
