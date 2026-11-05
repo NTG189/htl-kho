@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#e11b22">
+<title>Quản lý hàng xuất nhập kho – HTL</title>
+<meta name="theme-color" content="#e11b22">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="HTL Kho">
+<style>
+  :root{
+    --bg:#f4f6f9; --panel:#fff; --line:#e3e7ee; --text:#1f2937; --muted:#6b7280;
+    /* Màu thương hiệu lấy từ logo HTL: đỏ #e11b22, đen than #231f20 */
+    --primary:#e11b22; --primary-dark:#b8141a; --primary-soft:#fdeaea; --ink:#231f20;
+    --in:#15803d; --in-soft:#e7f6ec; --out:#1d4ed8; --out-soft:#e8efff;
+    --warn:#b45309; --warn-soft:#fdf3e1; --side:#231f20; --bad:#b91c1c;
+    --htl:#e11b22; --htl-soft:#fdeaea; --tp:#7e22ce; --tp-soft:#f3e8ff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--text);font-size:14px}
+  .app{display:flex;min-height:100vh}
+  aside{width:240px;background:#fff;color:var(--primary);border-right:1px solid var(--line);border-top:4px solid var(--primary);flex-shrink:0;display:flex;flex-direction:column}
+  .brand{padding:18px 16px 14px;border-bottom:1px solid var(--line);text-align:center}
+  .brand-logo{padding:4px 6px;margin-bottom:8px}
+  .brand-logo img{max-width:100%;height:46px;object-fit:contain;display:block;margin:auto}
+  .brand b{display:block;color:var(--primary);font-size:14px;letter-spacing:.3px;line-height:1.35}
+  .brand span{font-size:12px;color:var(--muted)}
+  nav{padding:12px;display:flex;flex-direction:column;gap:8px}
+  nav a{display:flex;align-items:center;gap:10px;padding:10px 12px;color:var(--primary);font-weight:600;text-decoration:none;cursor:pointer;
+    border:1.5px solid #f3b9bb;border-radius:8px;background:#fff;transition:.15s}
+  nav a:hover{border-color:var(--primary);background:var(--primary-soft)}
+  nav a.active{background:var(--primary);border-color:var(--primary);color:#fff;box-shadow:0 2px 6px rgba(225,27,34,.3)}
+  nav .ico{width:18px;text-align:center}
+  .side-foot{margin-top:auto;padding:14px 16px;font-size:12px;color:var(--muted);border-top:1px solid var(--line);text-align:center}
+  main{flex:1;min-width:0}
+  header{background:var(--panel);border-bottom:3px solid var(--primary);padding:12px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+  header h1{font-size:18px;margin:0}
+  .hright{display:flex;align-items:center;gap:16px}
+  .user{display:flex;align-items:center;gap:10px;color:var(--muted)}
+  .avatar{width:32px;height:32px;border-radius:50%;background:var(--ink);color:#fff;display:grid;place-items:center;font-weight:600}
+  /* Bộ lọc chủ sở hữu */
+  .seg{display:inline-flex;border:1px solid #cfd6e1;border-radius:8px;overflow:hidden;background:#fff}
+  .seg button{font:inherit;border:0;background:none;padding:7px 14px;cursor:pointer;color:var(--muted);font-weight:600;border-right:1px solid #cfd6e1}
+  .seg button:last-child{border-right:0}
+  .seg button.on{background:var(--primary);color:#fff}
+  .seg button.on[data-o="HTL"]{background:var(--htl)}
+  .seg button.on[data-o="TP"]{background:var(--tp)}
+  .seglbl{font-size:12px;color:var(--muted);margin-right:6px}
+  .content{padding:22px 24px}
+  .page{display:none}.page.active{display:block}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:20px}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-top:3px solid var(--ink);border-radius:10px;padding:16px}
+  .kpi.stock{border-top-color:var(--primary)}.kpi.in{border-top-color:var(--in)}.kpi.out{border-top-color:var(--out)}.kpi.warn{border-top-color:var(--warn)}
+  .kpi .lbl{color:var(--muted);font-size:13px}
+  .kpi .val{font-size:28px;font-weight:700;margin:6px 0 4px}
+  .kpi .sub{font-size:12px;color:var(--muted)}
+  .kpi.in .val{color:var(--in)} .kpi.out .val{color:var(--out)} .kpi.warn .val{color:var(--warn)} .kpi.stock .val{color:var(--primary)}
+  .split{display:flex;gap:6px;flex-wrap:wrap}
+  .grid2{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;margin-bottom:16px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}
+  .panel h3{margin:0 0 12px;font-size:15px;color:var(--ink);display:flex;justify-content:space-between;align-items:center;gap:10px}
+  .chart{display:flex;align-items:flex-end;gap:14px;height:200px;padding:10px 4px 0;border-bottom:1px solid var(--line)}
+  .day{flex:1;display:flex;flex-direction:column;align-items:center;height:100%;justify-content:flex-end}
+  .bars{display:flex;gap:4px;align-items:flex-end;height:100%}
+  .bar{width:16px;border-radius:4px 4px 0 0;position:relative}
+  .bar.in{background:#22c55e}.bar.out{background:#3b82f6}
+  .bar:hover::after{content:attr(data-v);position:absolute;top:-20px;left:50%;transform:translateX(-50%);font-size:11px;background:#111;color:#fff;padding:1px 5px;border-radius:3px}
+  .xlbl{display:flex;gap:14px;padding:6px 4px 0}.xlbl div{flex:1;text-align:center;font-size:12px;color:var(--muted)}
+  .legend{display:flex;gap:14px;font-size:12px;color:var(--muted);font-weight:400}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+  table{width:100%;border-collapse:collapse}
+  th,td{padding:9px 10px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+  th{background:#f8fafc;color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.3px}
+  td.num,th.num{text-align:right}
+  th.htl{color:var(--htl)} th.tp{color:var(--tp)}
+  tbody tr:hover{background:#fafbfd}
+  tr.group td{background:#f1f5f9;font-weight:700;font-size:13px}
+  tr.subtotal td{font-weight:700;background:#fafbfd}
+  .tag{display:inline-block;padding:2px 8px;border-radius:20px;font-size:12px;font-weight:600}
+  .tag.in{background:var(--in-soft);color:var(--in)} .tag.out{background:var(--out-soft);color:var(--out)}
+  .tag.warn{background:var(--warn-soft);color:var(--warn)} .tag.ok{background:var(--in-soft);color:var(--in)}
+  .tag.HTL{background:var(--htl-soft);color:var(--htl)} .tag.TP{background:var(--tp-soft);color:var(--tp)}
+  .pos{color:var(--in);font-weight:600}.neg{color:var(--out);font-weight:600}.bad{color:var(--bad);font-weight:700}
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+  input,select,textarea{font:inherit;padding:8px 10px;border:1px solid #cfd6e1;border-radius:7px;background:#fff;min-width:0}
+  input:focus,select:focus{outline:2px solid var(--primary-soft);border-color:var(--primary)}
+  .btn{font:inherit;padding:8px 14px;border-radius:7px;border:1px solid transparent;cursor:pointer;font-weight:600}
+  .btn.primary{background:var(--primary);color:#fff}.btn.primary:hover{background:var(--primary-dark)}
+  .btn.dark{background:var(--ink);color:#fff}
+  .btn.ghost:hover{border-color:var(--primary);color:var(--primary)}
+  .btn.in,.btn.out{background:var(--primary);color:#fff;padding:10px 22px}.btn.in:hover,.btn.out:hover{background:var(--primary-dark)}
+  .btn.ghost{background:#fff;border-color:#cfd6e1;color:var(--text)}
+  .spacer{flex:1}
+  .form{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .form label{display:flex;flex-direction:column;gap:5px;font-size:13px;color:var(--muted);font-weight:600}
+  .lines td input,.lines td select{width:100%}
+  .note{font-size:12px;color:var(--muted)}
+  .toast{position:fixed;right:20px;bottom:20px;background:#111827;color:#fff;padding:12px 16px;border-radius:8px;opacity:0;transform:translateY(10px);transition:.25s;pointer-events:none}
+  .toast.show{opacity:1;transform:none}
+  .progress{height:8px;background:#eef1f6;border-radius:6px;overflow:hidden;min-width:100px;display:flex}
+  .progress div{height:100%}
+  .owner-card{display:flex;gap:12px;align-items:center;padding:12px;border:1px solid var(--line);border-radius:8px;margin-bottom:10px}
+  .owner-dot{width:14px;height:14px;border-radius:50%}
+  .mock-badge{background:#fef3c7;color:#92400e;font-size:11px;padding:3px 8px;border-radius:5px;font-weight:700;margin-left:8px}
+  .cty-form{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .cty-form label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);font-weight:600}
+  .cty-form .full{grid-column:1/-1}
+  .modal{position:fixed;inset:0;background:rgba(15,23,42,.45);display:none;align-items:flex-start;justify-content:center;padding:30px;z-index:50;overflow:auto}
+  .modal.show{display:flex}
+  .modal-box{background:#fff;border-radius:10px;width:860px;max-width:100%;box-shadow:0 20px 50px rgba(0,0,0,.25)}
+  .modal-head{display:flex;gap:8px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)}
+  .modal-head b{flex:1}
+  .modal-body{padding:24px;background:#f3f5f9}
+  .sheet{background:#fff;padding:28px 32px;box-shadow:0 1px 4px rgba(0,0,0,.12)}
+  .lnk{color:var(--primary-dark);cursor:pointer;text-decoration:underline dotted}
+  .ico-btn{border:1px solid #cfd6e1;background:#fff;border-radius:6px;padding:3px 7px;cursor:pointer;font-size:12px;font-weight:600}
+  .ico-btn:hover{background:var(--primary-soft)}
+  /* Form phiếu nhập / xuất */
+  .fcard{background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden;box-shadow:0 2px 10px rgba(35,31,32,.06);max-width:1100px}
+  .fhead{display:flex;align-items:center;gap:18px;padding:16px 22px;border-top:6px solid var(--c,var(--primary));border-bottom:1px solid var(--line);
+    background:linear-gradient(90deg,#fff 0%,#fff 60%,var(--primary-soft) 100%)}
+  .fhead img{height:46px;width:auto}
+  .fhead .fsep{width:1px;align-self:stretch;background:var(--line)}
+  .ftitle{font-size:20px;font-weight:800;color:var(--ink);letter-spacing:.5px}
+  .ftitle .kind{display:inline-block;font-size:11px;font-weight:700;padding:3px 8px;border-radius:4px;margin-left:8px;vertical-align:3px;color:#fff;background:var(--c,var(--primary))}
+  .ftitle .kind.out{background:var(--ink)}
+  .fsub{font-size:12px;color:var(--muted);margin-top:2px}
+  .fno{margin-left:auto;text-align:right}
+  .fno span{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:700}
+  .fno input{border:0;background:transparent;font-size:22px;font-weight:800;color:var(--c,var(--primary));text-align:right;width:130px;padding:0}
+  .fno input:focus{outline:none}
+  .fbody{padding:18px 22px}
+  .fsec{display:flex;align-items:center;gap:10px;font-weight:700;color:var(--ink);font-size:14px;margin:4px 0 12px;padding-bottom:8px;border-bottom:1px dashed var(--line)}
+  .fsec .n{width:24px;height:24px;border-radius:50%;background:var(--c,var(--primary));color:#fff;display:grid;place-items:center;font-size:12px}
+  .fsec.s2{margin-top:22px}
+  .fbody .form label{color:var(--ink)}
+  .fbody .form label i{color:var(--primary);font-style:normal}
+  .lines{border:1px solid var(--line);border-radius:8px;overflow:hidden;border-collapse:separate;border-spacing:0}
+  .lines thead th{background:var(--ink);color:#fff;border-bottom:0}
+  .lines tbody tr:nth-child(even) td{background:#fbf9f9}
+  .lines td{border-bottom:1px solid var(--line)}
+  .lines td.stt{width:40px;text-align:center;color:var(--muted);font-weight:700}
+  .lines .del{border:0;background:none;color:#9ca3af;cursor:pointer;font-size:16px}.lines .del:hover{color:var(--primary)}
+  .addline{margin-top:10px;border:1px dashed #d4cfd0;background:#fff;width:100%;padding:9px;border-radius:8px;cursor:pointer;font:inherit;font-weight:600;color:var(--muted)}
+  .addline:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-soft)}
+  .fsum{display:flex;gap:12px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap}
+  .fsum div{border:1px solid var(--line);border-radius:8px;padding:8px 14px;min-width:120px;text-align:right}
+  .fsum small{display:block;font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase}
+  .fsum b{font-size:20px}
+  .fsum .tot{background:var(--ink);border-color:var(--ink);color:#fff}.fsum .tot small{color:#c9c4c5}
+  .ffoot{display:flex;align-items:center;gap:10px;padding:14px 22px;background:#faf8f8;border-top:1px solid var(--line)}
+  .ffoot .note{flex:1}
+  /* Chọn loại hàng nhập */
+  .loai-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
+  .loai{position:relative;border:1.5px solid var(--line);border-top:4px solid var(--c);border-radius:10px;background:#fff;padding:11px 12px;text-align:left;cursor:pointer;font:inherit;display:flex;flex-direction:column;gap:3px;transition:.15s}
+  .loai:hover{border-color:var(--c);border-top-color:var(--c)}
+  .loai b{font-size:13px;color:var(--ink)}
+  .loai small{font-size:11px;color:var(--muted)}
+  .loai .grp{font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--c)}
+  .loai.on{border-color:var(--c);background:color-mix(in srgb,var(--c) 9%,#fff);box-shadow:0 2px 8px color-mix(in srgb,var(--c) 25%,transparent)}
+  .loai.on b{color:var(--c)}
+  .loai.on::after{content:'✔';position:absolute;top:8px;right:10px;width:18px;height:18px;border-radius:50%;background:var(--c);color:#fff;font-size:11px;display:grid;place-items:center}
+  @media (max-width:1300px){.loai-grid{grid-template-columns:repeat(3,1fr)}}
+  td.dvt{color:var(--muted);font-weight:600}
+  .ftitle{white-space:nowrap}
+  @media (max-width:900px){.fhead{flex-wrap:wrap}.fhead .fsep{display:none}.fno{margin-left:0;text-align:left;width:100%}.fno input{text-align:left}.ffoot{flex-wrap:wrap}}
+  @media (max-width:1100px){.kpis{grid-template-columns:repeat(2,1fr)}.grid2{grid-template-columns:1fr}.form{grid-template-columns:1fr 1fr}}
+  /* Flow bản 2 */
+  .fsec .step{margin-left:auto;font-size:11px;font-weight:600;color:var(--muted);background:#f4f2f2;border-radius:20px;padding:2px 10px}
+  .lines.nobg .tgc{display:none}
+  .bg-opt{display:flex;gap:10px;margin-bottom:12px}
+  .bg-opt label{flex:1;border:1.5px solid var(--line);border-radius:10px;padding:12px 14px;cursor:pointer;display:flex;gap:10px;align-items:flex-start}
+  .bg-opt label.on{border-color:var(--c,var(--primary));background:color-mix(in srgb,var(--c,var(--primary)) 7%,#fff)}
+  .bg-opt input{margin-top:3px}
+  .bb-box{border:1px dashed #f0b429;background:#fffbeb;border-radius:10px;padding:14px;margin-bottom:6px;display:none}
+  .bb-box.show{display:block}
+  .warnc{color:#b45309;font-weight:700}
+  .negv{color:var(--bad);font-weight:700}
+  .cl-thieu{color:var(--bad);font-weight:700}.cl-thua{color:#b45309;font-weight:700}
+  #filterWrap select{min-width:190px}
+  /* ===== Gọn + responsive (điện thoại) – 05/11/2026 ===== */
+  header{position:sticky;top:0;z-index:20}
+  header h1{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .hamb{display:none;border:1px solid var(--line);background:#fff;border-radius:8px;width:40px;height:40px;font-size:18px;cursor:pointer;color:var(--primary);flex-shrink:0}
+  .kpi{cursor:pointer;transition:.15s}.kpi:hover{box-shadow:0 3px 10px rgba(0,0,0,.07)}
+  tr.click{cursor:pointer}
+  .tbl{overflow-x:auto}
+  .sub2{display:block;font-size:12px;color:var(--muted);font-weight:400}
+  .acts{display:flex;gap:4px;justify-content:flex-start}
+  .ico-btn.go{background:var(--primary);border-color:var(--primary);color:#fff;padding:5px 10px}
+  .fcard{max-width:1000px}
+  .form{grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
+  .form label .hint{font-weight:500;color:var(--muted);font-size:12px;min-height:15px}
+  details.more{margin-top:14px;border:1px solid var(--line);border-radius:10px;background:#fcfbfb}
+  details.more summary{cursor:pointer;padding:11px 14px;font-weight:700;color:var(--ink);list-style:none;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  details.more summary::-webkit-details-marker{display:none}
+  details.more summary::before{content:'+';width:20px;height:20px;border-radius:50%;background:var(--c,var(--primary));color:#fff;display:grid;place-items:center;font-weight:800;line-height:1}
+  details.more[open] summary::before{content:'–'}
+  details.more summary .note{font-weight:400}
+  details.more .form{padding:2px 14px 14px}
+  .inp-u{display:flex;align-items:center;gap:6px}.inp-u input{flex:1;width:100%;min-width:0}
+  .inp-u .dvt{font-size:12px;color:var(--muted);font-weight:600;min-width:34px}
+  option.newopt{color:#b8141a;font-weight:700}
+  .lines td.num input{text-align:right}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 14px}
+  .chip{border:1px solid var(--line);border-radius:20px;padding:4px 11px;font-size:13px;background:#fafafa}
+  .dm-sub{display:flex;align-items:center;justify-content:space-between;font-weight:700;font-size:13px;color:var(--ink)}
+  .btn.sm{padding:4px 10px;font-size:12px}
+  .cty-wrap{display:flex;gap:20px;align-items:flex-start}.cty-logo{width:220px;text-align:center}
+  .toolbar .grow{flex:1;min-width:220px}
+  .modal-box.sm{width:480px}
+  .am-body{padding:16px 18px;display:grid;gap:12px}
+  .am-body label{display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:600;color:var(--ink)}
+  .am-body label i{color:var(--primary);font-style:normal}
+  .am-body .note{margin:0}
+  .modal .ffoot{border-radius:0 0 10px 10px}
+  .ocr-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 14px;margin-bottom:16px;border:1px dashed var(--c,var(--primary));border-radius:10px;background:#fffdf6}
+  .ocr-bar .ico-big{font-size:24px}.ocr-bar .note{flex:1;min-width:220px;margin:0}
+  .ocr{background:#fff7d1!important;box-shadow:0 0 0 2px #facc15}
+  .modal-box.ocrbox{width:980px}
+  .ocr-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .ocr-src{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+  .ocr-prev{border:1px dashed #cfd6e1;border-radius:8px;min-height:180px;display:grid;place-items:center;background:#fafafa;overflow:hidden;padding:6px;text-align:center}
+  .ocr-prev img{max-width:100%;max-height:300px;display:block}
+  .ocr-run{display:flex;gap:10px;align-items:center;margin:10px 0 6px;flex-wrap:wrap}
+  .ocr-prog{height:6px;background:#eee;border-radius:4px;overflow:hidden}.ocr-prog i{display:block;height:100%;width:0;background:var(--primary);transition:width .2s}
+  .am-body textarea{width:100%;min-height:150px;font-family:Consolas,monospace;font-size:12.5px;margin-top:4px}
+  #ocrText{min-height:170px}
+  .ocr-res table{width:100%;border-collapse:collapse;font-size:13px;margin-top:10px}.ocr-res td,.ocr-res th{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left}.ocr-res .num{text-align:right}
+  .ok-y{color:#15803d;font-weight:700}.ok-n{color:var(--muted)}
+  .tag.off{background:#f1f5f9;color:#64748b}
+  .h3acts{display:flex;gap:6px;flex-wrap:wrap}
+  .ocr-miss{background:#fef2f2!important;box-shadow:0 0 0 2px #ef4444!important}
+  .ocr-unsure{background:#fff7ed!important;box-shadow:0 0 0 2px #f97316!important}
+  .miss-msg{color:#b91c1c;font-size:12px;font-weight:700}.unsure-msg{color:#c2410c;font-size:12px;font-weight:600}.warn-y{color:#c2410c;font-weight:700}
+  small.ocr-msg{display:block;margin-top:2px;line-height:1.3}
+  .ocr-alert{display:none;margin:-6px 0 16px;padding:10px 14px;border-radius:10px;background:#fef2f2;border:1px solid #fecaca;color:#7f1d1d;font-size:13px}
+  .ocr-alert.show{display:block}
+  @keyframes shake{0%,100%{transform:none}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+  .shake{animation:shake .25s 2}
+  .bnav,.scrim{display:none}
+  @media (max-width:760px){
+    body{font-size:15px}
+    aside{position:fixed;left:0;top:0;bottom:0;z-index:60;transform:translateX(-105%);transition:transform .2s;box-shadow:4px 0 24px rgba(0,0,0,.18);overflow-y:auto}
+    .app.side-open aside{transform:none}
+    .app.side-open .scrim{display:block;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:55}
+    .hamb{display:grid;place-items:center}
+    header{padding:8px 10px;gap:8px;border-bottom-width:2px}
+    header h1{font-size:16px}
+    header .mock-badge,.user,.seglbl{display:none}
+    .hright{gap:8px}
+    #filterWrap select{min-width:0;width:132px;padding:6px 8px;font-size:13px;min-height:36px}
+    .content{padding:12px 10px 92px}
+    input,select,textarea{font-size:16px;min-height:44px}
+    input[type=file]{min-height:0;font-size:14px}
+    .btn{min-height:42px}
+    .kpis{grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+    .kpi{padding:12px}.kpi .val{font-size:24px;margin:4px 0 0}.kpi .lbl{font-size:12px}.kpi .sub{display:none}
+    .grid2{grid-template-columns:1fr;gap:0;margin-bottom:0}
+    .panel{padding:12px;border-radius:12px;margin-bottom:12px}
+    .panel h3{flex-wrap:wrap}
+    .chart{gap:6px;height:140px}.bar{width:10px}.xlbl{gap:6px}.xlbl div{font-size:10px}
+    .form{grid-template-columns:1fr;gap:12px}
+    .fcard{overflow:visible}
+    .fhead{padding:12px 14px;gap:10px;border-radius:12px 12px 0 0}
+    .ffoot{border-radius:0 0 12px 12px}
+    .fhead img,.fhead .fsep,.ftitle .kind,.fsub{display:none}
+    .fttl{flex:1;min-width:0}
+    .ftitle{font-size:14px;white-space:normal;line-height:1.3}
+    .fno{margin-left:auto;width:auto;text-align:right}
+    .fno input{width:96px;font-size:18px;text-align:right;min-height:0}
+    .fbody{padding:14px 12px}
+    .fsec{font-size:15px}
+    .bg-opt{flex-direction:column;gap:8px}
+    .ffoot{position:sticky;bottom:62px;z-index:10;padding:10px 12px;box-shadow:0 -4px 12px rgba(0,0,0,.06)}
+    .ffoot .note{display:none}
+    .ffoot .btn.in,.ffoot .btn.out{flex:1;padding:10px}
+    .fsum{gap:8px}.fsum div{flex:1;min-width:0;padding:6px 10px}.fsum b{font-size:17px}
+    /* Dòng hàng trong phiếu → thẻ */
+    .lines,.lines tbody{display:block;border:0;border-radius:0;overflow:visible}
+    .lines thead{display:none}
+    .lines tr{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px;border:1px solid var(--line);border-left:4px solid var(--c,var(--primary));border-radius:10px;margin-bottom:10px;position:relative;background:#fff}
+    .lines td{display:flex;flex-direction:column;gap:4px;border:0!important;padding:0;white-space:normal;background:none!important;text-align:left}
+    .lines td::before{content:attr(data-l);font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.3px}
+    .lines td.w2{grid-column:1/-1}
+    .lines td.stt{display:none}
+    .lines td.delc{position:absolute;top:6px;right:6px}.lines td.delc::before{display:none}
+    .lines td.num input{text-align:left}
+    .lines td.avail,.lines td.cl{justify-content:flex-start}
+    .lines.nobg td.tgc{display:none}
+    .addline{padding:12px}
+    /* Bảng xem → thẻ */
+    table.stack,table.stack tbody,table.stack tr,table.stack td{display:block;width:100%}
+    table.stack thead{display:none}
+    table.stack tr{border:1px solid var(--line);border-radius:10px;margin-bottom:8px;padding:6px 12px;background:#fff}
+    table.stack tbody tr:hover{background:#fff}
+    table.stack td{display:flex;justify-content:space-between;align-items:baseline;gap:12px;border:0;padding:5px 0;white-space:normal;text-align:right!important}
+    table.stack td::before{content:attr(data-l);flex-shrink:0;color:var(--muted);font-size:12px;font-weight:600;text-align:left}
+    table.stack td:empty{display:none}
+    table.stack td:first-child{font-size:15px;border-bottom:1px dashed var(--line);padding-bottom:7px;margin-bottom:2px}
+    table.stack td[colspan]{display:block;text-align:left!important}
+    table.stack td[colspan]::before{display:none}
+    table.stack tr.group{background:#f1f5f9;border:0;margin-top:14px}
+    table.stack tr.group td,table.stack tr.subtotal td[colspan]{border:0;margin:0;padding:4px 0}
+    table.stack tr.subtotal{background:#fafbfd;border-style:dashed}
+    table.stack td .acts{justify-content:flex-end}
+    .toolbar{gap:8px}.toolbar > *{flex:1 1 100%}.toolbar .grow{min-width:0}
+    .toolbar label.note{display:flex;align-items:center;gap:8px;flex:1 1 40%}
+    .toolbar label.note input{flex:1}
+    .toolbar .spacer{display:none}
+    .cty-wrap{flex-direction:column}.cty-logo{width:100%}
+    .cty-form{grid-template-columns:1fr}
+    /* Thanh điều hướng dưới */
+    .bnav{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:40;background:#fff;border-top:1px solid var(--line);box-shadow:0 -2px 10px rgba(0,0,0,.06);padding:4px 4px calc(4px + env(safe-area-inset-bottom))}
+    .bnav a{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0;font-size:11px;font-weight:600;color:var(--muted);cursor:pointer;border-radius:8px}
+    .bnav a .ico{font-size:18px;line-height:1}
+    .bnav a.active{color:var(--primary);background:var(--primary-soft)}
+    .toast{left:12px;right:12px;bottom:78px;text-align:center}
+    .modal{padding:0;align-items:stretch;z-index:70}
+    .modal-box{border-radius:0;min-height:100%}
+    .modal-head{flex-wrap:wrap;position:sticky;top:0;background:#fff;z-index:2}
+    .modal-head b{flex:1 1 100%}
+    .modal-head .btn{flex:1}
+    .modal-body{padding:8px;overflow-x:auto}
+    .sheet{padding:14px;min-width:680px}
+    .modal.am{align-items:flex-end}
+    .modal.am .modal-box{min-height:0;border-radius:14px 14px 0 0;width:100%}
+    .modal.am .modal-head b{flex:1}.modal.am .modal-head .btn{flex:0 0 auto}
+    .modal.am .ffoot{position:static;box-shadow:none;padding-bottom:calc(10px + env(safe-area-inset-bottom))}
+    .modal.am .ffoot .btn{flex:1}
+    .ocr-grid{grid-template-columns:1fr}.ocr-bar .btn{flex:1 1 100%}.ocr-src .btn{flex:1}
+    .modal.ocrm .modal-head b{flex:1}.modal.ocrm .modal-head .btn{flex:0 0 auto}
+    .modal.ocrm .ffoot{bottom:0}.modal.ocrm .ffoot .btn{flex:1}
+    .h3acts{width:100%}.h3acts .btn{flex:1}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside id="side">
+    <div class="brand"><div class="brand-logo"><img class="logoImg" alt="HTL Logistics"></div><b>QUẢN LÝ HÀNG<br>XUẤT NHẬP KHO</b></div>
+    <nav id="nav">
+      <a data-page="dashboard" class="active"><span class="ico">▦</span>Tổng quan</a>
+      <a data-page="nhap"><span class="ico">⬇</span>Phiếu nhập</a>
+      <a data-page="xuat"><span class="ico">⬆</span>Phiếu xuất</a>
+      <a data-page="ton"><span class="ico">▤</span>Tồn kho</a>
+      <a data-page="doisoat"><span class="ico">⇄</span>Thu hồi / trả về</a>
+      <a data-page="lichsu"><span class="ico">☰</span>Lịch sử giao dịch</a>
+      <a data-page="dulieu"><span class="ico">👥</span>Lái xe &amp; nhân viên kho</a>
+      <a data-page="danhmuc"><span class="ico">⚙</span>Danh mục</a>
+    </nav>
+    <div class="side-foot">Phiên bản 1.0</div>
+  </aside>
+  <div class="scrim" onclick="toggleSide(false)"></div>
+
+  <main>
+    <header>
+      <button class="hamb" onclick="toggleSide()" aria-label="Menu">☰</button>
+      <h1 id="pageTitle">Tổng quan</h1>
+      <div class="hright">
+        <div id="filterWrap"><span class="seglbl">Loại hàng:</span><select id="fLoai"></select></div>
+        <div class="user"><span>Kho HTL</span><div class="avatar">TK</div></div>
+      </div>
+    </header>
+
+    <div class="content">
+      <!-- TỔNG QUAN -->
+      <section class="page active" id="dashboard">
+        <div class="kpis">
+          <div class="kpi in" onclick="go('nhap')"><div class="lbl">Phiếu nhập hôm nay</div><div class="val" id="kNhap">0</div><div class="sub" id="kNhapSub"></div></div>
+          <div class="kpi out" onclick="go('xuat')"><div class="lbl">Phiếu xuất hôm nay</div><div class="val" id="kXuat">0</div><div class="sub" id="kXuatSub"></div></div>
+          <div class="kpi stock" onclick="go('ton')"><div class="lbl">Dòng tồn âm</div><div class="val" id="kAm">0</div><div class="sub">Cần kiểm tra lại</div></div>
+          <div class="kpi warn" onclick="go('doisoat')"><div class="lbl">Chờ đối soát / kiểm tra</div><div class="val" id="kCho">0</div><div class="sub" id="kChoSub"></div></div>
+        </div>
+        <div class="grid2">
+          <div class="panel">
+            <h3>Số phiếu 7 ngày gần nhất <span class="legend"><span><i style="background:#22c55e"></i>Nhập</span><span><i style="background:#3b82f6"></i>Xuất</span></span></h3>
+            <div class="chart" id="chart"></div>
+            <div class="xlbl" id="chartX"></div>
+          </div>
+          <div class="panel">
+            <h3>Tồn hiện tại theo loại hàng</h3>
+            <div class="tbl"><table class="stack"><thead><tr><th>Loại hàng</th><th class="num">Tồn</th><th class="num">Dòng âm</th></tr></thead><tbody id="dashTon"></tbody></table></div>
+            <p class="note">Bấm vào loại hàng để lọc theo loại đó.</p>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>Cần kiểm tra</h3>
+          <div class="tbl"><table class="stack"><thead><tr><th>Việc</th><th>Chi tiết</th><th>Tham chiếu</th></tr></thead><tbody id="dashCheck"></tbody></table></div>
+        </div>
+        <div class="panel">
+          <h3>Phiếu gần đây <button class="btn ghost" onclick="go('lichsu')">Xem tất cả →</button></h3>
+          <div class="tbl"><table class="stack"><thead><tr><th>Số phiếu</th><th>Ngày</th><th>Loại</th><th>Điểm giao / nguồn</th><th class="num">Tổng SL</th><th>Bàn giao</th></tr></thead><tbody id="dashRecent"></tbody></table></div>
+        </div>
+      </section>
+
+      <!-- PHIẾU NHẬP -->
+      <section class="page" id="nhap">
+        <div class="fcard" id="nCard">
+          <div class="fhead">
+            <img class="logoImg" alt="HTL">
+            <div class="fsep"></div>
+            <div class="fttl"><div class="ftitle"><span id="nTitle">PHIẾU NHẬP KHO</span><span class="kind in">NHẬP KHO</span></div>
+              <div class="fsub">Kho HTL · Người lập: <span class="uLbl"></span></div></div>
+            <div class="fno"><span>Số phiếu</span><input id="nSo" readonly></div>
+          </div>
+          <div class="fbody">
+            <div class="ocr-bar"><span class="ico-big">📷</span><span class="note"><b>Đọc phiếu tự động</b> – chụp / chọn ảnh phiếu giao hàng, chứng từ nhập, hệ thống đọc chữ số và tự điền vào phiếu. Có thể tải <b>mẫu phiếu Excel</b> cho thủ kho ghi tay rồi chụp lại.</span><button class="btn ghost" onclick="mauExcel('N')">⬇ Mẫu phiếu Excel</button><button class="btn primary" onclick="openOCR('N')">📷 Đọc từ ảnh phiếu</button></div>
+            <div class="ocr-alert"></div>
+            <div class="fsec"><span class="n">1</span>Thông tin phiếu nhập</div>
+            <div class="form">
+              <label><span>Loại hàng / khách hàng <i>*</i></span><select id="nLoaiSel" data-add="loai" onchange="chonLoai(this.value)"></select></label>
+              <label><span>Nguồn nhập <i>*</i></span><select id="nNguon" data-add="nguon"></select></label>
+              <label>Biển số xe<select id="nXe" data-add="xe"></select></label>
+              <label>Người giao (tài xế)<select id="nNguoi" data-add="taixe" onchange="lxChange(this,nXe,nDT)"></select></label>
+            </div>
+            <details class="more">
+              <summary>Thông tin thêm <span class="note">ngày nhập, ngày booking, điện thoại, ghi chú, người lập, thủ kho</span></summary>
+              <div class="form">
+                <label>Ngày nhập<input type="date" id="nNgay"></label>
+                <label>Ngày booking<input type="date" id="nBooking"></label>
+                <label>Điện thoại người giao<input id="nDT" inputmode="tel" placeholder="Tự điền theo tài xế"></label>
+                <label>Ghi chú<input id="nGc" placeholder="VD: bao bì móp 2 thùng"></label>
+                <label>Người lập phiếu<select id="nUser" data-add="nhanvien" onchange="setUser(this.value)"></select></label>
+                <label>Thủ kho<select id="nThuKho" data-add="nhanvien"></select></label>
+              </div>
+            </details>
+            <div class="fsec s2"><span class="n">2</span><span id="nSec3">Hàng nhập</span></div>
+            <table class="lines"><thead id="nHead"></thead><tbody id="nLines"></tbody></table>
+            <button class="addline" onclick="addLineN()" id="nAddTxt">+ Thêm dòng</button>
+            <div class="fsum" id="nSum"></div>
+          </div>
+          <div class="ffoot">
+            <span class="note" id="nNote"></span>
+            <button class="btn ghost" onclick="chonLoai(NLOAI)">Làm mới</button>
+            <button class="btn in" onclick="saveNhap()">✔ Lưu phiếu nhập</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- PHIẾU XUẤT -->
+      <section class="page" id="xuat">
+        <div class="fcard" id="xCard">
+          <div class="fhead">
+            <img class="logoImg" alt="HTL">
+            <div class="fsep"></div>
+            <div class="fttl"><div class="ftitle"><span id="xTitle">PHIẾU XUẤT KHO</span><span class="kind out">XUẤT KHO</span></div>
+              <div class="fsub">Kho HTL · Người lập: <span class="uLbl"></span></div></div>
+            <div class="fno"><span>Số phiếu</span><input id="xSo" readonly></div>
+          </div>
+          <div class="fbody">
+            <div class="ocr-bar"><span class="ico-big">📷</span><span class="note"><b>Đọc phiếu tự động</b> – chụp / chọn ảnh đơn xuất hàng / phiếu xuất, hệ thống đọc chữ số và tự điền vào phiếu. Có thể tải <b>mẫu phiếu Excel</b> cho thủ kho ghi tay rồi chụp lại.</span><button class="btn ghost" onclick="mauExcel('X')">⬇ Mẫu phiếu Excel</button><button class="btn primary" onclick="openOCR('X')">📷 Đọc từ ảnh phiếu</button></div>
+            <div class="ocr-alert"></div>
+            <div class="fsec"><span class="n">1</span>Thông tin phiếu xuất</div>
+            <div class="form">
+              <label><span>Loại hàng / khách hàng <i>*</i></span><select id="xLoaiSel" data-add="loai" onchange="chonLoaiX(this.value)"></select></label>
+              <label><span>Tuyến giao / nơi nhận <i>*</i></span><input id="xNoi" list="xNoiList" autocomplete="off" placeholder="Chọn tuyến, NPP hoặc gõ tên công ty nhận" oninput="noiChange()" onchange="noiChange()"><datalist id="xNoiList"></datalist><small class="hint" id="xHint"></small></label>
+              <label>Biển số xe<select id="xXe" data-add="xe"></select></label>
+              <label>Lái xe nhận hàng<select id="xNguoi" data-add="taixe" onchange="lxChange(this,xXe,xDT)"></select></label>
+            </div>
+            <details class="more">
+              <summary>Thông tin thêm <span class="note">ngày, số đơn, lý do, điện thoại, ghi chú, người lập, thủ kho</span></summary>
+              <div class="form">
+                <label>Ngày xuất<input type="date" id="xNgay"></label>
+                <label>Số đơn / booking<input id="xDon" placeholder="VD: DH-12345"></label>
+                <label>Lý do xuất<select id="xLyDo" onchange="updHint()"></select></label>
+                <label>Điện thoại lái xe<input id="xDT" inputmode="tel" placeholder="Tự điền theo lái xe"></label>
+                <label>Ghi chú<input id="xGc" placeholder="Ghi chú phiếu xuất"></label>
+                <label>Người lập phiếu<select id="xUser" data-add="nhanvien" onchange="setUser(this.value)"></select></label>
+                <label>Thủ kho<select id="xThuKho" data-add="nhanvien"></select></label>
+              </div>
+            </details>
+            <div class="fsec s2"><span class="n">2</span><span id="xSec3">Hàng xuất</span></div>
+            <table class="lines nobg" id="xTable"><thead id="xHead"></thead><tbody id="xLines"></tbody></table>
+            <button class="addline" onclick="addLineX()" id="xAddTxt">+ Thêm dòng</button>
+            <div class="fsec s2"><span class="n">3</span>Bàn giao cho lái xe</div>
+            <div class="bg-opt" id="bgOpt">
+              <label data-m="khop" onclick="setBG('khop')"><input type="radio" name="bg" value="khop" checked><div><b>Đủ – khớp phiếu</b><div class="note">Lái xe nhận đúng số lượng.</div></div></label>
+              <label data-m="lech" onclick="setBG('lech')"><input type="radio" name="bg" value="lech"><div><b>Có thừa / thiếu</b><div class="note">Nhập SL thực giao, lập biên bản lái xe.</div></div></label>
+            </div>
+            <div class="bb-box" id="bbBox">
+              <div class="form">
+                <label>Số biên bản<input id="xBBso" readonly></label>
+                <label>File biên bản (ảnh / PDF)<input type="file" id="xBBfile" accept="image/*,.pdf"></label>
+                <label>Ghi chú biên bản<input id="xBBgc" placeholder="VD: thiếu 2 thùng"></label>
+              </div>
+              <p class="note" style="margin:10px 0 0">Chưa có biên bản giấy? <a href="#" onclick="mauExcel('BB');return false">⬇ Tải mẫu biên bản thừa / thiếu (Excel)</a>. Mockup: bản thật sẽ đọc file biên bản và tự điền "SL thực giao".</p>
+            </div>
+            <div class="fsum" id="xSum"></div>
+          </div>
+          <div class="ffoot">
+            <span class="note">Cho phép xuất vượt tồn – hệ thống hiển thị tồn âm để kiểm tra.</span>
+            <button class="btn ghost" onclick="chonLoaiX(XLOAI)">Làm mới</button>
+            <button class="btn out" onclick="saveXuat()">✔ Lưu phiếu xuất</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- TỒN KHO -->
+      <section class="page" id="ton">
+        <div class="panel">
+          <div class="toolbar">
+            <label class="note">Từ <input type="date" id="tFrom"></label>
+            <label class="note">Đến <input type="date" id="tTo"></label>
+            <button class="btn primary" onclick="renderTon()">Xem</button>
+            <span class="spacer"></span>
+            <button class="btn ghost" onclick="taiTon()">⬇ Xuất Excel</button>
+          </div>
+          <div class="tbl"><table id="tonTable" class="stack"><thead><tr><th>Mặt hàng / pallet</th><th>Số lô</th><th class="num">Tồn đầu</th><th class="num">Nhập</th><th class="num">Xuất</th><th class="num">Tồn cuối</th><th>Ghi chú</th></tr></thead><tbody id="tonBody"></tbody></table></div>
+          <p class="note">Hàng chưa có đơn xuất, đang chờ trong kho là <b>hàng tồn</b>. Tồn âm không bị chặn – xem cột Ghi chú để kiểm tra.</p>
+        </div>
+      </section>
+
+      <!-- THU HỒI / TRẢ VỀ -->
+      <section class="page" id="doisoat">
+        <div class="panel">
+          <h3>Đối soát hàng thu hồi / trả về
+            <select id="dsSt" onchange="renderDoiSoat()"><option value="">Tất cả trạng thái</option><option value="cho">Chờ đối soát</option><option value="da">Đã đối soát</option></select></h3>
+          <div class="fsum" id="dsTong" style="justify-content:flex-start;margin:0 0 12px"></div>
+          <div class="tbl"><table class="stack"><thead><tr><th>Số phiếu</th><th>Ngày</th><th>Loại hàng</th><th>Lý do · nguồn</th><th class="num">SL (hỏng)</th><th>Trạng thái</th></tr></thead><tbody id="dsBody"></tbody></table></div>
+        </div>
+        <div class="panel">
+          <h3>Biên bản ghi nhận thừa / thiếu hàng</h3>
+          <div class="ocr-bar" style="margin-bottom:12px"><span class="note">Mẫu biên bản trống (Excel) để thủ kho / lái xe ghi tay khi phát hiện thừa – thiếu, ký rồi chụp đính kèm vào phiếu xuất.</span><button class="btn ghost" onclick="mauExcel('BB')">⬇ Mẫu biên bản Excel</button></div>
+          <div class="tbl"><table class="stack"><thead><tr><th>Số biên bản</th><th>Ngày</th><th>Phiếu xuất</th><th>Lái xe · xe</th><th>Chênh lệch</th><th>Trạng thái</th></tr></thead><tbody id="bbBody"></tbody></table></div>
+        </div>
+      </section>
+
+      <!-- LỊCH SỬ -->
+      <section class="page" id="lichsu">
+        <div class="panel">
+          <div class="toolbar">
+            <input id="lsSearch" class="grow" placeholder="Tìm số phiếu, booking, biển số, điểm giao, số lô..." oninput="renderLichSu()">
+            <select id="lsType" onchange="renderLichSu()"><option value="">Nhập + Xuất</option><option value="NHAP">Chỉ phiếu nhập</option><option value="XUAT">Chỉ phiếu xuất</option></select>
+            <select id="lsPallet" onchange="renderLichSu()"></select>
+            <button class="btn ghost" onclick="taiDanhSach()">⬇ Excel</button>
+          </div>
+          <div class="tbl"><table class="stack"><thead><tr><th>Số phiếu</th><th>Ngày</th><th>Loại</th><th>Điểm giao / nguồn</th><th>Mặt hàng</th><th class="num">Tổng SL</th><th>Bàn giao</th><th>Tải phiếu</th></tr></thead><tbody id="lsBody"></tbody></table></div>
+        </div>
+      </section>
+
+      <!-- DỮ LIỆU ĐẦU VÀO: LÁI XE & NHÂN VIÊN KHO -->
+      <section class="page" id="dulieu">
+        <div class="panel">
+          <h3><span>Danh sách lái xe <span class="note" id="lxCount"></span></span>
+            <span class="h3acts"><button class="btn ghost" onclick="taiDL('laixe')">⬇ Excel</button><button class="btn ghost" onclick="openImport('laixe')">⇪ Nhập từ Excel</button><button class="btn primary" onclick="openAdd('taixe')">＋ Thêm lái xe</button></span></h3>
+          <div class="toolbar"><input class="grow" id="lxSearch" placeholder="Tìm tên, điện thoại, biển số..." oninput="renderDuLieu()"></div>
+          <div class="tbl"><table class="stack"><thead><tr><th>Họ tên</th><th>Điện thoại</th><th>Số CCCD</th><th>Hạng GPLX</th><th>Xe thường chạy</th><th>Đơn vị</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody id="lxBody"></tbody></table></div>
+        </div>
+        <div class="panel">
+          <h3><span>Danh sách nhân viên kho <span class="note" id="nvCount"></span></span>
+            <span class="h3acts"><button class="btn ghost" onclick="taiDL('nhanvien')">⬇ Excel</button><button class="btn ghost" onclick="openImport('nhanvien')">⇪ Nhập từ Excel</button><button class="btn primary" onclick="openAdd('nhanvien')">＋ Thêm nhân viên</button></span></h3>
+          <div class="toolbar"><input class="grow" id="nvSearch" placeholder="Tìm mã, tên, chức vụ..." oninput="renderDuLieu()"></div>
+          <div class="tbl"><table class="stack"><thead><tr><th>Họ tên</th><th>Mã NV</th><th>Chức vụ</th><th>Ca làm việc</th><th>Điện thoại</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody id="nvBody"></tbody></table></div>
+        </div>
+        <p class="note">Lái xe / nhân viên <b>"Đang làm"</b> hiện trong droplist của phiếu nhập – xuất (Tài xế, Lái xe nhận hàng, Người lập phiếu, Thủ kho). Chọn lái xe trên phiếu sẽ tự điền <b>xe thường chạy</b> nếu ô biển số còn trống. Dữ liệu lưu trong trình duyệt. <a class="lnk" onclick="resetDL()">Khôi phục danh sách mẫu</a></p>
+      </section>
+
+      <!-- DANH MỤC -->
+      <section class="page" id="danhmuc">
+        <div class="panel">
+          <h3>Khách hàng / loại hàng &amp; mẫu phiếu <button class="btn primary" onclick="openAdd('loai')">＋ Khách hàng mới</button></h3>
+          <div class="tbl"><table class="stack"><thead><tr><th>Loại hàng</th><th>Khách hàng / bên ký</th><th>Nhóm</th><th>Mẫu phiếu nhập · xuất</th><th>Tiền tố</th></tr></thead><tbody id="dmLoai"></tbody></table></div>
+        </div>
+        <div class="grid2">
+          <div class="panel">
+            <h3>Mặt hàng <button class="btn ghost" onclick="openAdd('hang')">＋ Thêm</button></h3>
+            <div class="tbl"><table class="stack"><thead><tr><th>Tên mặt hàng</th><th>Mã</th><th>Loại hàng</th><th>ĐVT</th></tr></thead><tbody id="dmHang"></tbody></table></div>
+          </div>
+          <div class="panel">
+            <h3>Điểm giao / NPP <button class="btn ghost" onclick="openAdd('diem')">＋ Thêm</button></h3>
+            <div class="tbl"><table class="stack"><thead><tr><th>Tên</th><th>Khu vực</th><th>Tuyến</th></tr></thead><tbody id="dmDiem"></tbody></table></div>
+          </div>
+        </div>
+        <div class="grid2">
+          <div class="panel">
+            <h3>Tuyến giao <button class="btn ghost" onclick="openAdd('tuyen')">＋ Thêm</button></h3>
+            <div class="tbl"><table class="stack"><thead><tr><th>Tuyến</th><th>Điểm giao</th></tr></thead><tbody id="dmTuyen"></tbody></table></div>
+          </div>
+          <div class="panel">
+            <h3>Xe &amp; lái xe</h3>
+            <div class="dm-sub">Biển số xe <button class="btn ghost sm" onclick="openAdd('xe')">＋ Thêm xe</button></div>
+            <div class="chips" id="dmXe"></div>
+            <div class="dm-sub">Lái xe <button class="btn ghost sm" onclick="go('dulieu')">Quản lý chi tiết →</button></div>
+            <div class="chips" id="dmTaiXe"></div>
+          </div>
+        </div>
+        <div class="grid2">
+          <div class="panel">
+            <h3>Loại pallet</h3>
+            <div class="tbl"><table class="stack"><thead><tr><th>Tên</th><th>Mã</th><th>Kích thước</th><th class="num">Tồn đầu HTL</th><th class="num">Tồn đầu TP</th></tr></thead><tbody id="dmPallet"></tbody></table></div>
+          </div>
+          <div class="panel">
+            <h3>Chủ sở hữu pallet</h3>
+            <div id="dmOwner"></div>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>Thông tin công ty (in trên phiếu) <button class="btn primary" onclick="luuCty()">Lưu thông tin</button></h3>
+          <div class="cty-wrap">
+            <div class="cty-logo"><div style="border:1px dashed #cfd6e1;border-radius:8px;padding:14px"><img class="logoImg" style="max-width:100%;height:60px;object-fit:contain"></div>
+              <label class="btn ghost" style="display:inline-block;margin-top:8px">Đổi logo<input type="file" accept="image/*" hidden onchange="doiLogo(this)"></label></div>
+            <div class="cty-form" style="flex:1" id="ctyForm"></div>
+          </div>
+          <p class="note">Ô nào để trống sẽ không in lên phiếu. Ô có dấu [ ] là chỗ cần điền thông tin thật.</p>
+        </div>
+        <div class="panel">
+          <h3>Mục đã thêm mới</h3>
+          <p class="note" id="dmExtraNote"></p>
+          <button class="btn ghost" onclick="resetExtra()">Xoá các mục đã thêm, về danh mục mẫu</button>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <div class="bnav" id="bnav">
+    <a data-page="dashboard" class="active"><span class="ico">▦</span>Tổng quan</a>
+    <a data-page="nhap"><span class="ico">⬇</span>Nhập</a>
+    <a data-page="xuat"><span class="ico">⬆</span>Xuất</a>
+    <a data-page="ton"><span class="ico">▤</span>Tồn kho</a>
+    <a data-more="1"><span class="ico">☰</span>Thêm</a>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<div class="modal" id="phieuModal" onclick="if(event.target===this)dongPhieu()">
+  <div class="modal-box">
+    <div class="modal-head"><b id="pmTitle">Phiếu</b>
+      <button class="btn primary" onclick="inPhieu(pmSo)">🖨 In / PDF</button>
+      <button class="btn ghost" onclick="taiExcel(pmSo)">⬇ Excel</button>
+      <button class="btn ghost" onclick="dongPhieu()">Đóng</button></div>
+    <div class="modal-body"><div class="sheet" id="pmBody"></div></div>
+  </div>
+</div>
+<div class="modal am" id="addModal" onclick="if(event.target===this)dongAdd()">
+  <div class="modal-box sm">
+    <div class="modal-head"><b id="amTitle">Thêm mới</b><button class="btn ghost" onclick="dongAdd()">✕</button></div>
+    <div class="am-body" id="amBody"></div>
+    <div class="ffoot"><span class="note" style="flex:1"></span><button class="btn ghost" onclick="dongAdd()">Huỷ</button><button class="btn primary" onclick="luuAdd()">✔ Lưu</button></div>
+  </div>
+</div>
+
+<div class="modal ocrm" id="ocrModal" onclick="if(event.target===this)dongOCR()">
+  <div class="modal-box ocrbox">
+    <div class="modal-head"><b id="ocrTitle">Đọc phiếu từ ảnh</b><button class="btn ghost" onclick="dongOCR()">✕</button></div>
+    <div class="am-body">
+      <div class="ocr-grid">
+        <div>
+          <div class="ocr-src">
+            <label class="btn primary">📷 Chụp / chọn ảnh phiếu<input type="file" id="ocrFile" accept="image/*" hidden onchange="chonAnh(this.files[0])"></label>
+            <button class="btn ghost" onclick="anhMau()">🧪 Thử với phiếu mẫu</button>
+          </div>
+          <div class="ocr-prev" id="ocrPrev"><span class="note">Chưa có ảnh. Chụp rõ, đủ sáng, giữ phiếu thẳng.</span></div>
+          <div class="ocr-run"><button class="btn dark" id="ocrBtn" onclick="chayOCR()" disabled>🔍 Đọc phiếu</button><span class="note" id="ocrSt"></span></div>
+          <div class="ocr-prog"><i id="ocrBar"></i></div>
+        </div>
+        <div>
+          <label>Văn bản đọc được <span class="note">(sửa được, hoặc dán văn bản từ ứng dụng khác)</span>
+            <textarea id="ocrText" placeholder="Văn bản trên phiếu sẽ hiện ở đây sau khi đọc..." oninput="phanTich()"></textarea></label>
+          <div class="ocr-res" id="ocrRes"></div>
+        </div>
+      </div>
+    </div>
+    <div class="ffoot"><span class="note" style="flex:1">Kiểm tra lại các ô được tô vàng trước khi lưu phiếu.</span><button class="btn ghost" onclick="dongOCR()">Huỷ</button><button class="btn primary" id="ocrFill" onclick="dienPhieu()" disabled>✔ Điền vào phiếu</button></div>
+  </div>
+</div>
+<div class="modal am" id="impModal" onclick="if(event.target===this)dongImport()">
+  <div class="modal-box sm">
+    <div class="modal-head"><b id="impTitle">Nhập từ Excel</b><button class="btn ghost" onclick="dongImport()">✕</button></div>
+    <div class="am-body">
+      <p class="note" id="impNote"></p>
+      <div class="ocr-src"><button class="btn ghost sm" onclick="taiMau()">⬇ Tải file mẫu</button><label class="btn ghost sm">📂 Chọn file (.csv, .xls mẫu)<input type="file" accept=".csv,.txt,.xls,.htm,.html" hidden onchange="docFileImp(this)"></label></div>
+      <label>Dán dữ liệu (bôi đen các dòng trong Excel → Ctrl+C → dán vào đây)<textarea id="impText" oninput="xemImport()" placeholder="Họ tên&#9;Điện thoại&#9;..."></textarea></label>
+      <div class="note" id="impPrev"></div>
+    </div>
+    <div class="ffoot"><span class="note" style="flex:1"></span><button class="btn ghost" onclick="dongImport()">Huỷ</button><button class="btn primary" onclick="luuImport()">✔ Nhập dữ liệu</button></div>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script src="db.js"></script>
+</body>
+</html>
